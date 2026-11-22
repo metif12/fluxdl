@@ -54,9 +54,11 @@ fn url_token(url string) string {
 // serve blocks on addr with the given queue. Pass an addr bound to loopback,
 // because the secret is a bearer token and this is not a public API.
 pub fn serve(addr string, secret string, session_path string) {
+	mut manager := new_manager(secret, session_path)
+	manager.restore_session()
 	mut server := http.Server{
 		addr:                 addr
-		handler:              &Handler{ manager: new_manager(secret, session_path) }
+		handler:              &Handler{ manager: manager }
 		show_startup_message: false
 	}
 	server.listen_and_serve()

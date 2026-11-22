@@ -14,6 +14,7 @@ import json2
 import os
 import strings
 import sync
+import time
 
 pub const version = '0.4.0'
 
@@ -35,6 +36,7 @@ pub mut:
 	options       map[string]string
 	error_code    string
 	error_message string
+	active_uri    string
 	// version changes on every mutation. A status object is encoded once per
 	// version and reused by every poll in between, which is the hot path:
 	// Fluxget asks for the whole queue on every tick.
@@ -61,6 +63,7 @@ pub mut:
 	fetcher      &transfer.Fetcher
 	status_cache map[string]StatusCache
 	cancels      map[string]&transfer.Cancel
+	notices      []string
 	// Global results are cached the same way as rows: a version bump on any
 	// queue or settings mutation is the only thing that invalidates them.
 	queue_version   int
@@ -85,6 +88,8 @@ pub fn new_manager(secret string, session_path string) &Manager {
 	opts['max-connection-per-server'] = '4'
 	opts['min-split-size'] = '1048576'
 	opts['continue'] = 'true'
+	opts['max-retries'] = '0'
+	opts['retry-delay'] = '1000'
 	return &Manager{
 		downloads:    map[string]Download{}
 		order:        []
@@ -368,7 +373,8 @@ fn encode_status(d Download) string {
 		mut ub := RowBuilder{ sb: strings.new_builder(96) }
 		ub.sb.write_byte(`{`)
 		ub.add_str('uri', u)
-		ub.add_str('status', 'used')
+		state := if d.active_uri == '' || d.active_uri == u { 'used' } else { 'waiting' }
+		ub.add_str('status', state)
 		uris << ub.done()
 	}
 
@@ -448,6 +454,7 @@ fn method_names() []string {
 		'aria2.changeGlobalOption',
 		'aria2.saveSession',
 		'aria2.shutdown',
+		'aria2.getNotices',
 		'system.multicall',
 		'system.listMethods',
 	]
@@ -590,9 +597,14 @@ fn (mut m Manager) dispatch(method string, p []json2.Any) (string, int, string) 
 			if method == 'aria2.getUris' {
 				mut rows := []json2.Any{}
 				for u in d.uris {
+					state := if d.active_uri == '' || d.active_uri == u {
+						'used'
+					} else {
+						'waiting'
+					}
 					rows << json2.Any(map[string]json2.Any{
 						'uri':    u
-						'status': 'used'
+						'status': state
 					})
 				}
 				return json2.encode(rows), 0, ''
@@ -724,6 +736,9 @@ fn (mut m Manager) dispatch(method string, p []json2.Any) (string, int, string) 
 			}
 			return '"OK"', 0, ''
 		}
+		'aria2.getNotices' {
+			return json2.encode(m.drain_notices()), 0, ''
+		}
 		'aria2.shutdown' {
 			m.mu.lock()
 			m.shutdown = true
@@ -744,6 +759,42 @@ fn (mut m Manager) dispatch(method string, p []json2.Any) (string, int, string) 
 }
 
 // ---- queue mechanics -----------------------------------------------------
+
+// notice records a human-readable event for the caller to drain.
+fn (mut m Manager) notice(text string) {
+	m.mu.lock()
+	m.notices << text
+	m.mu.unlock()
+}
+
+// drain_notices returns and clears the pending notices.
+pub fn (mut m Manager) drain_notices() []string {
+	m.mu.lock()
+	defer {
+		m.mu.unlock()
+	}
+	out := m.notices.clone()
+	m.notices.clear()
+	return out
+}
+
+// restore_session re-queues the downloads from the aria2-format session file.
+// Fluxget owns supervision; this only rebuilds the queue after a restart.
+pub fn (mut m Manager) restore_session() int {
+	entries, _ := session.load(m.session_path)
+	for e in entries {
+		mut opts := map[string]string{}
+		for k, v in e.options {
+			opts[k] = v
+		}
+		m.add([e.uri], opts) or {
+			m.notice('restore skipped ${e.uri}: ${err.msg()}')
+			continue
+		}
+	}
+	m.notice('restored ${entries.len} download(s)')
+	return entries.len
+}
 
 fn (mut m Manager) add(uris []string, opts map[string]string) !string {
 	m.mu.lock()
@@ -779,17 +830,19 @@ fn (mut m Manager) add(uris []string, opts map[string]string) !string {
 
 fn (mut m Manager) run(gid string) {
 	// Snapshot everything under one lock. Nothing below reads a Manager map
-	// again, so changeOption/changeGlobalOption cannot race with this worker.
-	mut uri := ''
+	// again, so concurrent option changes cannot race with this worker.
+	mut uris := []string{}
 	mut dir := ''
 	mut out := ''
 	mut conn_opt := ''
 	mut min_opt := ''
+	mut retry_opt := ''
+	mut delay_opt := ''
 	mut cancel := &transfer.Cancel{}
 	m.mu.lock()
 	if gid in m.downloads {
 		d := m.downloads[gid]
-		uri = d.uri
+		uris = d.uris.clone()
 		dir = d.options['dir']
 		if dir == '' {
 			dir = m.options['dir']
@@ -797,48 +850,87 @@ fn (mut m Manager) run(gid string) {
 		out = d.options['out']
 		conn_opt = d.options['max-connection-per-server']
 		min_opt = d.options['min-split-size']
+		retry_opt = d.options['max-retries']
+		if retry_opt == '' {
+			retry_opt = m.options['max-retries']
+		}
+		delay_opt = d.options['retry-delay']
+		if delay_opt == '' {
+			delay_opt = m.options['retry-delay']
+		}
 	}
 	if gid in m.cancels {
 		cancel = m.cancels[gid] or { &transfer.Cancel{} }
 	}
 	m.mu.unlock()
-	if cancel.is_stopped() {
+	if cancel.is_stopped() || uris.len == 0 {
 		return
 	}
 
 	if out == '' {
-		l := link.parse(uri) or {
+		l := link.parse(uris[0]) or {
 			m.set_error(gid, 1, err.msg())
 			return
 		}
 		out = link.safe_name(l.name)
 	}
 	path := os.join_path(dir, out)
-	meta := m.fetcher.head(uri) or {
-		if !cancel.is_stopped() {
-			m.set_error(gid, 1, err.msg())
+
+	// Mirror liveness: use the first source that answers a bounded probe.
+	mut chosen := ''
+	mut meta := transfer.Meta{}
+	for u in uris {
+		if cancel.is_stopped() {
+			return
 		}
-		return
+		probe := m.fetcher.head(u) or {
+			m.notice('mirror down for ${gid}: ${err.msg()}')
+			continue
+		}
+		chosen = u
+		meta = probe
+		break
 	}
-	if cancel.is_stopped() {
+	if chosen == '' {
+		m.notice('no live mirror for ${gid}')
+		if !cancel.is_stopped() {
+			m.set_error(gid, 1, 'no live mirror')
+		}
 		return
 	}
 	m.set_started(gid, meta.length, path, dir, out)
+	m.set_active_uri(gid, chosen)
 
 	conn := util.int_or(conn_opt, 4)
 	min_seg := util.i64_or(min_opt, 0)
-	mut progress := &transfer.Progress{}
-	transfer.download_with_meta(uri, meta, meta.length, 0, path, transfer.Options{
+	retries := util.int_or(retry_opt, 0)
+	delay_ms := util.i64_or(delay_opt, 1000)
+	opts := transfer.Options{
 		connections: conn
 		min_segment: min_seg
 		cancel:      cancel
-	}, m.fetcher, mut progress) or {
-		if !cancel.is_stopped() {
-			m.set_error(gid, 1, err.msg())
-		}
-		return
 	}
-	if cancel.is_stopped() {
+	mut succeeded := false
+	for attempt := 0; attempt <= retries; attempt++ {
+		if cancel.is_stopped() {
+			return
+		}
+		mut progress := &transfer.Progress{}
+		transfer.download_with_meta(chosen, meta, meta.length, 0, path, opts, m.fetcher, mut progress) or {
+			m.notice('attempt ${attempt + 1} for ${gid} failed: ${err.msg()}')
+			if attempt == retries {
+				if !cancel.is_stopped() {
+					m.set_error(gid, 1, err.msg())
+				}
+				return
+			}
+			time.sleep(time.Duration(delay_ms * i64(attempt + 1)) * time.millisecond)
+			continue
+		}
+		succeeded = true
+		break
+	}
+	if !succeeded || cancel.is_stopped() {
 		return
 	}
 
@@ -859,6 +951,21 @@ fn (mut m Manager) run(gid string) {
 	cur.version++
 	m.queue_version++
 	m.downloads[gid] = cur
+	m.notice('download complete: ${gid}')
+}
+
+fn (mut m Manager) set_active_uri(gid string, uri string) {
+	m.mu.lock()
+	defer {
+		m.mu.unlock()
+	}
+	if gid !in m.downloads {
+		return
+	}
+	mut d := m.downloads[gid]
+	d.active_uri = uri
+	d.version++
+	m.downloads[gid] = d
 }
 
 fn (mut m Manager) set_started(gid string, total i64, path string, dir string, out string) {

@@ -194,6 +194,24 @@ fn test_pause_and_remove_signal_the_worker_to_stop() {
 	assert cancel.is_stopped(), 'pause must stop the worker'
 }
 
+fn test_session_restore_and_notice_queue() {
+	mut m := new_test_manager('')
+	entries := [session.Entry{
+		uri:     'https://a/restored.bin'
+		options: map[string]string{}
+	}]
+	session.save(m.session_path, entries) or { panic(err.msg()) }
+	assert m.restore_session() == 1, 'one row restored'
+
+	mut notices := m.handle_payload('{"jsonrpc":"2.0","id":1,"method":"aria2.getNotices","params":[]}')
+	rows := any_arr(result_of(notices))
+	assert rows.len >= 1, 'restore records a notice: ${notices}'
+	assert any_str(rows[0]).contains('restored 1'), any_str(rows[0])
+
+	notices = m.handle_payload('{"jsonrpc":"2.0","id":2,"method":"aria2.getNotices","params":[]}')
+	assert any_arr(result_of(notices)).len == 0, 'drain clears the queue'
+}
+
 fn test_the_queue_refuses_to_grow_past_the_cap() {
 	mut m := new_test_manager('')
 	m.order = []string{len: 10000}
