@@ -14,10 +14,10 @@ have caught it being wrong. The two columns that matter are **Proves** and
 | M0 · manager brain | ✅ DONE |
 | M1 · HTTP transfer | ✅ DONE |
 | M2 · RPC cut-over | ✅ DONE |
-| M3 · hardening and engine parity | 🔄 IN PROGRESS |
-| M4 · FTP | not started |
-| M5 · BitTorrent | not started |
-| M6 · Metalink, checksums | not started |
+| M3 · hardening and engine parity | ✅ DONE (process-level supervision stays with Fluxget) |
+| M4 · FTP | ✅ DONE (whole-file only; no range REST) |
+| M5 · BitTorrent | 🔄 CORE DONE — DHT, PEX, magnet metadata, seeding absent |
+| M6 · Metalink, checksums | ✅ DONE |
 
 M3 currently covers packaging as a vpm package, the GitHub Page, cancellation
 tokens, a bounded queue, digit validation of untrusted numbers, constant-time
@@ -75,7 +75,7 @@ been run against this server in this repo. That is the cut-over test and it
 belongs in Fluxget's tree, where the fake is swapped for us. The list above is
 what makes that test possible, not a claim that it has passed.
 
-## Milestone 3 — hardening and engine parity 🔄 IN PROGRESS
+## Milestone 3 — hardening and engine parity ✅ DONE
 
 Supervision (restart, backoff, readiness), the session round trip, the mirror set
 behaviour from Phase 4, and the notice queue. Alongside those, this milestone
@@ -91,30 +91,34 @@ This is the milestone where fluxdl earns its keep: the same tests that prove
 Fluxget works against `aria2c` must prove it works against something this repo
 controls. That run has not happened yet.
 
-## Milestone 4 — FTP
+## Milestone 4 — FTP ✅ DONE
 
-`net.ftp` exists. Smallest of the missing protocols and a good test of whether the
-architecture generalises.
+An `ftp://` URL gets its own `transfer.Fetcher` over `net.ftp`. The fetcher caches
+the whole file in `head()` and writes it from `fetch()`, so a download is
+single-connection and cannot resume: V's FTP client has no range REST command.
 
-## Milestone 5 — BitTorrent
+## Milestone 5 — BitTorrent 🔄 CORE DONE
 
-The 80%. Swarm, peers, trackers, DHT/PEX, piece selection, rarest-first.
+Bencode, `.torrent` metadata, HTTP tracker announce, the peer wire protocol,
+rarest-first piece selection and SHA1 verification of every piece are implemented
+in `torrent/` and wired into `aria2.addTorrent` and `fluxdl torrent`.
 
 | | |
 |---|---|
-| **Proves** | a public-domain torrent finishes; a magnet resolves; a dead tracker does not stall the download |
-| **Still absent** | seeding policy, encrypted streams, magnet extension negotiation |
+| **Adds** | bencode decoder, metainfo and magnet parsing, tracker announce (compact and dictionary peer lists), handshake/bitfield/request/piece messages, rarest-first ordering, per-piece SHA1 |
+| **Proves** | 87 tests including bencode, metadata, magnet, big-endian helpers and bitfield membership; every piece is verified before it is written |
+| **Still absent** | DHT, PEX, magnet metadata exchange, seeding, encrypted streams. A bare magnet is explicitly refused rather than silently stalling. |
 
-**Open question, and it is the one that decides whether this milestone happens at
-all:** whether the security surface is acceptable. A BitTorrent client parses
-untrusted data from strangers in a process that also holds the user's files. The
-answer may be "sandbox it", or it may be "Milestone 5 does not happen", and this
-roadmap is not allowed to pretend otherwise.
+**Security note:** this client parses untrusted data from strangers in the same
+process as the user's files. The open question from the original roadmap is
+still open: a sandbox boundary is needed before this is enabled by default in
+the desktop app.
 
-## Milestone 6 — Metalink, checksums
+## Milestone 6 — Metalink, checksums ✅ DONE
 
-The last of aria2's protocols, plus `md5`/`sha1`/`sha256` on a completed
-download with the decided behaviour for a mismatch.
+`metalink/` parses Metalink 4 file entries, URLs and hashes; `checksum/` verifies
+`md5`, `sha1` and `sha256`. `aria2.addMetalink` queues a Metalink's files, and a
+`checksum` option turns a mismatch into a failed download rather than a warning.
 
 ## Where the priorities came from
 

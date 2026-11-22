@@ -27,6 +27,9 @@ recreated by its worker.
 | Method | Arguments | Result |
 |---|---|---|
 | `aria2.addUri` | `[token,] uris, options?` | `gid` (16 chars) |
+| `aria2.addTorrent` | `[token,] path` | `gid` |
+| `aria2.addMagnet` | `[token,] uri` | error until metadata exchange exists |
+| `aria2.addMetalink` | `[token,] path` | array of `gid`s |
 | `aria2.tellStatus` | `gid` | status object |
 | `aria2.tellActive` | — | array of status objects with `status: "active"` |
 | `aria2.tellWaiting` | — | array with `status: "waiting"` |
@@ -52,6 +55,7 @@ recreated by its worker.
 | `aria2.changeGlobalOption` | `options` | `"OK"` |
 | `aria2.saveSession` | — | `"OK"` — writes aria2-format session |
 | `aria2.shutdown` | — | `"OK"` |
+| `aria2.getNotices` | — | array of event strings (fluxdl extension) |
 
 ### System
 

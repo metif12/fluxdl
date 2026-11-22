@@ -6,8 +6,12 @@
 // four wire quirks recorded in docs/compat/fluxget.md before that test runs.
 module rpc
 
+import fluxdl.checksum
+import fluxdl.ftp
 import fluxdl.link
+import fluxdl.metalink
 import fluxdl.session
+import fluxdl.torrent
 import fluxdl.transfer
 import fluxdl.util
 import json2
@@ -432,6 +436,8 @@ fn (mut m Manager) status_json(gid string) string {
 fn method_names() []string {
 	return [
 		'aria2.addUri',
+		'aria2.addTorrent',
+		'aria2.addMagnet',
 		'aria2.tellStatus',
 		'aria2.tellActive',
 		'aria2.tellWaiting',
@@ -454,6 +460,7 @@ fn method_names() []string {
 		'aria2.changeGlobalOption',
 		'aria2.saveSession',
 		'aria2.shutdown',
+		'aria2.addMetalink',
 		'aria2.getNotices',
 		'system.multicall',
 		'system.listMethods',
@@ -736,6 +743,64 @@ fn (mut m Manager) dispatch(method string, p []json2.Any) (string, int, string) 
 			}
 			return '"OK"', 0, ''
 		}
+		'aria2.addTorrent' {
+			path := any_str(field_from(p, 0))
+			raw := os.read_file(path) or {
+				return 'null', -32000, 'cannot read torrent: ${err.msg()}'
+			}
+			meta := torrent.parse(raw.bytes()) or {
+				return 'null', -32000, err.msg()
+			}
+			mut opts := map[string]string{}
+			if p.len > 1 {
+				opts = string_map(p[1])
+			}
+			gid := m.add_torrent(meta, opts) or {
+				return 'null', -32000, err.msg()
+			}
+			return json2.encode(gid), 0, ''
+		}
+		'aria2.addMagnet' {
+			uri := any_str(field_from(p, 0))
+			meta := torrent.parse_magnet(uri) or {
+				return 'null', -32000, err.msg()
+			}
+			if meta.pieces.len == 0 {
+				return 'null', -32000, 'magnet metadata exchange is not implemented'
+			}
+			mut opts := map[string]string{}
+			if p.len > 1 {
+				opts = string_map(p[1])
+			}
+			gid := m.add_torrent(meta, opts) or {
+				return 'null', -32000, err.msg()
+			}
+			return json2.encode(gid), 0, ''
+		}
+		'aria2.addMetalink' {
+			path := any_str(field_from(p, 0))
+			raw := os.read_file(path) or {
+				return 'null', -32000, 'cannot read metalink: ${err.msg()}'
+			}
+			files := metalink.parse(raw) or {
+				return 'null', -32000, err.msg()
+			}
+			mut gids := []json2.Any{}
+			for file in files {
+				mut opts := map[string]string{
+					'out': file.name
+				}
+				for algo in ['sha256', 'sha1', 'md5'] {
+					if algo in file.hashes {
+						opts['checksum'] = file.hashes[algo]
+						break
+					}
+				}
+				gid := m.add(file.urls, opts) or { continue }
+				gids << json2.Any(gid)
+			}
+			return json2.encode(gids), 0, ''
+		}
 		'aria2.getNotices' {
 			return json2.encode(m.drain_notices()), 0, ''
 		}
@@ -756,6 +821,15 @@ fn (mut m Manager) dispatch(method string, p []json2.Any) (string, int, string) 
 			return 'null', -32601, 'Method not found'
 		}
 	}
+}
+
+// fetcher_for picks the transport for a URI. The injectable manager fetcher is
+// kept for tests and for HTTP; FTP gets its own whole-file implementation.
+fn (m &Manager) fetcher_for(url string) &transfer.Fetcher {
+	if url.starts_with('ftp://') {
+		return ftp.new_fetcher()
+	}
+	return m.fetcher
 }
 
 // ---- queue mechanics -----------------------------------------------------
@@ -794,6 +868,69 @@ pub fn (mut m Manager) restore_session() int {
 	}
 	m.notice('restored ${entries.len} download(s)')
 	return entries.len
+}
+
+fn (mut m Manager) add_torrent(meta &torrent.Torrent, opts map[string]string) !string {
+	m.mu.lock()
+	if m.order.len >= max_downloads {
+		m.mu.unlock()
+		return error('queue full')
+	}
+	m.counter++
+	mut gid := m.counter.str()
+	for gid.len < 16 {
+		gid = '0' + gid
+	}
+	mut dir := opts['dir']
+	if dir == '' {
+		dir = m.options['dir']
+	}
+	d := Download{
+		gid:           gid
+		uri:           'magnet:?xt=urn:btih:${meta.name}'
+		uris:          []
+		status:        'waiting'
+		total:         meta.length
+		options:       opts
+		error_code:    ''
+		error_message: ''
+		version:       1
+	}
+	m.downloads[gid] = d
+	m.order << gid
+	m.cancels[gid] = &transfer.Cancel{}
+	m.queue_version++
+	m.mu.unlock()
+	go m.run_torrent(gid, meta, dir)
+	return gid
+}
+
+fn (mut m Manager) run_torrent(gid string, meta &torrent.Torrent, dir string) {
+	name := link.safe_name(meta.name)
+	m.set_started(gid, meta.length, os.join_path(dir, name), dir, name)
+	path := torrent.download(meta, dir) or {
+		m.notice('torrent ${gid} failed: ${err.msg()}')
+		m.set_error(gid, 1, err.msg())
+		return
+	}
+	m.mu.lock()
+	defer {
+		m.mu.unlock()
+	}
+	if gid !in m.downloads {
+		return
+	}
+	mut cur := m.downloads[gid]
+	if cur.status != 'active' {
+		return
+	}
+	cur.status = 'complete'
+	cur.completed = cur.total
+	cur.path = path
+	cur.version++
+	m.queue_version++
+	m.downloads[gid] = cur
+	m.notice('download complete: ${gid}')
 }
 
 fn (mut m Manager) add(uris []string, opts map[string]string) !string {
@@ -838,6 +975,7 @@ fn (mut m Manager) run(gid string) {
 	mut min_opt := ''
 	mut retry_opt := ''
 	mut delay_opt := ''
+	mut checksum_opt := ''
 	mut cancel := &transfer.Cancel{}
 	m.mu.lock()
 	if gid in m.downloads {
@@ -858,6 +996,7 @@ fn (mut m Manager) run(gid string) {
 		if delay_opt == '' {
 			delay_opt = m.options['retry-delay']
 		}
+		checksum_opt = d.options['checksum']
 	}
 	if gid in m.cancels {
 		cancel = m.cancels[gid] or { &transfer.Cancel{} }
@@ -879,16 +1018,19 @@ fn (mut m Manager) run(gid string) {
 	// Mirror liveness: use the first source that answers a bounded probe.
 	mut chosen := ''
 	mut meta := transfer.Meta{}
+	mut chosen_fetcher := m.fetcher
 	for u in uris {
 		if cancel.is_stopped() {
 			return
 		}
-		probe := m.fetcher.head(u) or {
+		candidate_fetcher := m.fetcher_for(u)
+		probe := candidate_fetcher.head(u) or {
 			m.notice('mirror down for ${gid}: ${err.msg()}')
 			continue
 		}
 		chosen = u
 		meta = probe
+		chosen_fetcher = candidate_fetcher
 		break
 	}
 	if chosen == '' {
@@ -916,7 +1058,7 @@ fn (mut m Manager) run(gid string) {
 			return
 		}
 		mut progress := &transfer.Progress{}
-		transfer.download_with_meta(chosen, meta, meta.length, 0, path, opts, m.fetcher, mut progress) or {
+		transfer.download_with_meta(chosen, meta, meta.length, 0, path, opts, chosen_fetcher, mut progress) or {
 			m.notice('attempt ${attempt + 1} for ${gid} failed: ${err.msg()}')
 			if attempt == retries {
 				if !cancel.is_stopped() {
@@ -932,6 +1074,18 @@ fn (mut m Manager) run(gid string) {
 	}
 	if !succeeded || cancel.is_stopped() {
 		return
+	}
+	if checksum_opt != '' {
+		valid := checksum.verify_file(path, checksum_opt) or {
+			m.notice('checksum check failed for ${gid}: ${err.msg()}')
+			false
+		}
+		if !valid {
+			if !cancel.is_stopped() {
+				m.set_error(gid, 4, 'checksum mismatch')
+			}
+			return
+		}
 	}
 
 	m.mu.lock()

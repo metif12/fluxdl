@@ -39,8 +39,9 @@ fn main() {
 }
 ```
 
-The five public modules are `plan`, `link`, `session`, `transfer` and `rpc`.
-See [docs/PACKAGE.md](docs/PACKAGE.md) for the API surface and publishing notes.
+The public modules are `plan`, `link`, `session`, `transfer`, `rpc`, `util`,
+`checksum`, `metalink`, `ftp` and `torrent`. See
+[docs/PACKAGE.md](docs/PACKAGE.md) for the API surface and publishing notes.
 
 ## Why this exists
 
@@ -55,8 +56,9 @@ it is scoped to those:
 
 1. **Fluxget runs on Windows only today, and aria2c ships as a GPL binary from a
    script.** A pure-V engine is built by the same `v` that builds the app.
-2. **The protocol a desktop download manager actually needs is HTTP.** BitTorrent
-   is the 30% that costs 80% of the code, and it is not needed for a first release.
+2. **The protocol a desktop download manager needs first is HTTP.** The other
+   protocols are layered behind the same `transfer.Fetcher` seam rather than
+   growing a second engine.
 3. **A compile error is a build failure; a segfault in `aria2c 1.37.0` at 3am is a
    bug report with no stack.**
 
@@ -71,6 +73,9 @@ it is scoped to those:
 | **Mirror sets** | De-duplicated, ordered, and labelled by kind — a `.torrent` path is bytes, a magnet is its own protocol, a URL is HTTP. |
 | **Per-download options** | Where aria2's own option names apply. |
 | **The JSON-RPC subset Fluxget calls** | `addUri`, `tellStatus`, `tellActive/Waiting/Stopped`, pause/unpause, remove, `getFiles`, `getUris`, `getOption`, `changeOption`, global stat/options, `saveSession`, `shutdown`, `system.multicall`, `system.listMethods` — on the same loopback POST shape, with string-valued numbers and the leading `token:` argument. |
+| **FTP** | An `ftp://` URL uses a `net.ftp`-backed fetcher. Whole-file only, because V's FTP client has no range REST. |
+| **BitTorrent core** | Bencode, `.torrent` metadata, HTTP trackers, the peer wire protocol, rarest-first piece selection and SHA1 verification of every piece. |
+| **Metalink and checksums** | Metalink 4 files and URLs, plus `md5`/`sha1`/`sha256` verification of a completed download. |
 
 What it reads is what `aria2c 1.37.0` was measured to write on this machine: a
 multi-mirror `addUri` comes back from `aria2.getUris` as **five rows for two
@@ -82,15 +87,14 @@ source instead; that difference is deliberate and is called out in
 
 Honest, because a list like this is the only thing that makes the list useful.
 
-- **BitTorrent.** The whole protocol: swarm, peers, trackers, DHT, PEX, piece
-  selection, the rarest-first policy. This is the 80%.
-- **Metalink.**
-- **FTP / SFTP** (aria2's `net.ftp` has something to build on).
-- **Checksums** — algorithm dispatch, and the resume question of which checksum
-  wins when two definitions disagree.
-- **Cookie/robots handling, mirror liveness probing.**
-- **The daemon part** — Fluxget already owns supervision (restart, backoff,
-  readiness) in `aria2ctl/`. This is the engine and its RPC server.
+- **DHT, PEX and magnet metadata exchange.** Tracker-based `.torrent` downloads
+  work; a bare magnet cannot yet discover peers or fetch metadata.
+- **BitTorrent seeding and encrypted streams.**
+- **SFTP**, cookie/robots handling.
+- **The Fluxget cut-over test.** `platform/contract_test.v` lives in Fluxget and
+  has not been run against this server.
+- **Process-level supervision.** Fluxget still owns restart, backoff and
+  readiness in `aria2ctl/`; this engine retries transfers, not processes.
 
 ## Install and use
 
@@ -104,6 +108,12 @@ v build -o fluxdl.exe .          # V 0.5.2
 
 # Fetch it for real:
 ./fluxdl.exe download https://example.com/big.bin -x 8 -d D:/Downloads
+
+# Fetch a torrent over its HTTP tracker and peers:
+./fluxdl.exe torrent ubuntu.iso.torrent -d D:/Downloads
+
+# Inspect a Metalink document:
+./fluxdl.exe metalink release.metalink
 
 # Run Fluxget's JSON-RPC surface on loopback:
 ./fluxdl.exe serve --addr 127.0.0.1:9009 --secret change-me --session D:/Downloads/fluxdl.session
@@ -120,9 +130,13 @@ plan/      plan.v         how one download is split into byte ranges
 link/      link.v         what an address means, and what to call the file
 session/   session.v      the queue on disk, in aria2's format
 transfer/                 the engine: probe, concurrent fetch, byte accounting
-  transfer.v              pure manager; the HTTP path is injected
-  http_fetcher.v          the only file here that opens a socket
-rpc/                      loopback JSON-RPC, exactly the subset Fluxget calls
+  transfer.v              pure manager; the transport is injected
+  http_fetcher.v          the HTTP transport
+ftp/                      an FTP transfer.Fetcher (whole file)
+checksum/                 md5/sha1/sha256 verification
+metalink/                 Metalink 4 files and URLs
+torrent/                  bencode, trackers, peer wire, SHA1 pieces
+rpc/                      loopback JSON-RPC, the subset Fluxget calls
 docs/                     the GitHub Pages site and the decision records
 ```
 
@@ -134,7 +148,7 @@ bugs are found without a network.
 ## Testing
 
 ```powershell
-v test .                  # 72 tests across six module test files
+v test .                  # 87 tests across eleven module test files
 v fmt -w .                # v fmt is law
 ```
 

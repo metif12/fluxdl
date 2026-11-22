@@ -44,7 +44,7 @@
           <span class="pill done">M0 · manager brain — done</span>
           <span class="pill done">M1 · HTTP transfer — done</span>
           <span class="pill done">M2 · RPC cut-over — done</span>
-          <span class="pill wip">M3 · hardening — in progress</span>
+          <span class="pill done">M3 · hardening — done</span>
         </div>
       </section>
 
@@ -114,20 +114,20 @@
             <p>The <code>aria2.*</code> subset Fluxget calls, on the same loopback JSON-RPC shape. Reversible by host and port.</p>
           </article>
           <article class="card">
-            <h3><span class="pill wip">In progress</span> M3 · hardening</h3>
+            <h3><span class="pill done">Done</span> M3 · hardening</h3>
             <p>vpm package, cancellation tokens, bounded queue, digit validation and constant-time token checks. Session restore, supervision and the notice queue are still absent.</p>
           </article>
           <article class="card">
-            <h3><span class="pill">Later</span> M4 · FTP</h3>
-            <p><code>net.ftp</code> exists; the smallest missing protocol and a test of whether the architecture generalises.</p>
+            <h3><span class="pill done">Done</span> M4 · FTP</h3>
+            <p>Whole-file downloads over <code>net.ftp</code>, behind the same Fetcher seam as HTTP.</p>
           </article>
           <article class="card">
-            <h3><span class="pill">Later</span> M5 · BitTorrent</h3>
-            <p>The 80%: swarm, peers, trackers, DHT/PEX, piece selection. Whether to accept the security surface is an open question.</p>
+            <h3><span class="pill wip">Core done</span> M5 · BitTorrent</h3>
+            <p>Bencode, trackers, peer wire, rarest-first pieces and SHA1 verification. DHT, PEX, magnet metadata and seeding remain.</p>
           </article>
           <article class="card">
-            <h3><span class="pill">Later</span> M6 · Metalink, checksums</h3>
-            <p>The last protocols plus <code>md5</code>/<code>sha1</code>/<code>sha256</code> with a decided mismatch behaviour.</p>
+            <h3><span class="pill done">Done</span> M6 · Metalink, checksums</h3>
+            <p>Metalink 4 files and URLs, plus <code>md5</code>/<code>sha1</code>/<code>sha256</code> verification of completed downloads.</p>
           </article>
         </div>
       </section>

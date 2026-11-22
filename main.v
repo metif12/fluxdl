@@ -8,9 +8,12 @@
 module main
 
 import os
+import fluxdl.ftp
 import fluxdl.link
+import fluxdl.metalink
 import fluxdl.plan
 import fluxdl.rpc
+import fluxdl.torrent
 import fluxdl.session
 import fluxdl.transfer
 import fluxdl.util
@@ -31,6 +34,12 @@ fn usage() {
   fluxdl download <url> [-d dir] [-o name] [-x connections] [--min-segment bytes]
       Fetch a URL with N ranges, writing one file. Resumes from the bytes
       already on disk.
+
+  fluxdl torrent <path> [-d dir]
+      Download a .torrent over HTTP trackers and the peer wire protocol.
+
+  fluxdl metalink <path>
+      Print the files, URLs and hashes a Metalink document declares.
 
   fluxdl serve [--addr 127.0.0.1:9009] [--secret token] [--session path]
       Run the loopback JSON-RPC server that Fluxget talks to.
@@ -54,6 +63,8 @@ fn main() {
 		'session' { cmd_session(args[2..]) }
 		'suggest' { cmd_suggest(args[2..]) }
 		'download' { cmd_download(args[2..]) }
+		'metalink' { cmd_metalink(args[2..]) }
+		'torrent' { cmd_torrent(args[2..]) }
 		'serve' { cmd_serve(args[2..]) }
 		else {
 			usage()
@@ -182,7 +193,7 @@ fn cmd_download(args []string) {
 	}
 	path := os.join_path(dir, out)
 
-	mut fetcher := &transfer.HttpFetcher{}
+	fetcher := if url.starts_with('ftp://') { ftp.new_fetcher() } else { &transfer.HttpFetcher{} }
 	meta := fetcher.head(url) or {
 		eprintln('fluxdl: ${err.msg()}')
 		exit(1)
@@ -201,6 +212,57 @@ fn cmd_download(args []string) {
 		exit(1)
 	}
 	println('${path}: ${progress.value} of ${meta.length} bytes (${n} fetched this run)')
+}
+
+fn cmd_torrent(args []string) {
+	if args.len < 1 {
+		eprintln('torrent needs a .torrent path')
+		exit(1)
+	}
+	mut dir := os.getenv('FLUXDL_DIR')
+	if dir == '' {
+		dir = os.getwd()
+	}
+	if args.len > 2 && args[1] == '-d' {
+		dir = args[2]
+	}
+	raw := os.read_file(args[0]) or {
+		eprintln('fluxdl: ${err.msg()}')
+		exit(1)
+	}
+	meta := torrent.parse(raw.bytes()) or {
+		eprintln('fluxdl: ${err.msg()}')
+		exit(1)
+	}
+	path := torrent.download(meta, dir) or {
+		eprintln('fluxdl: ${err.msg()}')
+		exit(1)
+	}
+	println(path)
+}
+
+fn cmd_metalink(args []string) {
+	if args.len < 1 {
+		eprintln('metalink needs a path')
+		exit(1)
+	}
+	raw := os.read_file(args[0]) or {
+		eprintln('fluxdl: ${err.msg()}')
+		exit(1)
+	}
+	files := metalink.parse(raw) or {
+		eprintln('fluxdl: ${err.msg()}')
+		exit(1)
+	}
+	for file in files {
+		println('${file.name}: ${file.urls.len} source(s)')
+		for url in file.urls {
+			println('  ${url}')
+		}
+		for algo, digest in file.hashes {
+			println('  ${algo}: ${digest}')
+		}
+	}
 }
 
 fn cmd_serve(args []string) {

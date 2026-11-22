@@ -85,6 +85,17 @@ curl -s -X POST http://127.0.0.1:9009/jsonrpc `
 
 See [RPC.md](RPC.md) for every method and its shape.
 
+### `fluxdl torrent <path> [-d dir]`
+
+Downloads a `.torrent` using its HTTP tracker and the peer wire protocol. Pieces
+are chosen rarest-first and verified against the SHA1 hashes in the metainfo.
+DHT, PEX and magnet metadata exchange are not implemented.
+
+### `fluxdl metalink <path>`
+
+Prints the files, URLs and hashes declared by a Metalink 4 document. To queue
+the downloads, use the `aria2.addMetalink` JSON-RPC method instead.
+
 ### `fluxdl --version`
 
 Prints the version and exits. Equivalent to `-V`.

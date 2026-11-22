@@ -44,6 +44,10 @@ component (`plan`, `link`, …), because V flattens module prefixes.
 | `transfer` | `Meta`, `Fetcher`, `Options`, `Progress`, `HttpFetcher`, `download`, `download_with_meta` | fetching ranges, with an injectable transport |
 | `rpc` | `Manager`, `new_manager`, `Handler`, `serve`, `version` | the loopback JSON-RPC surface Fluxget calls |
 | `util` | `all_digits`, `int_or`, `i64_or`, `secure_equal` | validating untrusted numbers and comparing secrets |
+| `checksum` | `hash_bytes`, `hash_file`, `verify_file` | md5/sha1/sha256 verification |
+| `metalink` | `MetalinkFile`, `parse` | Metalink 4 files, URLs and hashes |
+| `ftp` | `Fetcher`, `new_fetcher`, `parse_target` | whole-file FTP downloads |
+| `torrent` | `Torrent`, `parse`, `parse_magnet`, `download`, `announce`, `handshake` | bencode, trackers, peer wire, SHA1 pieces |
 
 `transfer.Fetcher` is the seam for callers that want to own the transport:
 implement `head` and `fetch`, then call `transfer.download` with your
