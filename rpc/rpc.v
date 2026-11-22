@@ -292,23 +292,36 @@ pub fn (mut m Manager) handle_payload(raw string) string {
 	}
 
 	if method == 'system.multicall' {
-		mut out := []string{}
+		mut out := strings.new_builder(256)
+		out.write_byte(`[`)
+		mut first_entry := true
 		for call in any_arr(field_from(args, 0)) {
 			c := any_map(call)
 			name := any_str(field(c, 'methodName'))
 			result_json, code, msg := m.dispatch(name, any_arr(field(c, 'params')))
+			if !first_entry {
+				out.write_byte(`,`)
+			}
+			first_entry = false
 			if code != 0 {
 				mut err_obj := map[string]json2.Any{
 					'code':    json2.Any(code)
 					'message': json2.Any(msg)
 				}
-				out << json2.encode(err_obj)
+				out.write_string(json2.encode(err_obj))
 			} else {
 				// A successful multicall entry is a one-element array.
-				out << '[' + result_json + ']'
+				out.write_byte(`[`)
+				out.write_string(result_json)
+				out.write_byte(`]`)
 			}
 		}
-		return ok(id, '[' + out.join(',') + ']')
+		out.write_byte(`]`)
+		multicall_json := out.str()
+		unsafe {
+			out.free()
+		}
+		return ok(id, multicall_json)
 	}
 
 	result_json, code, msg := m.dispatch(method, args)
@@ -516,7 +529,10 @@ fn (mut m Manager) dispatch(method string, p []json2.Any) (string, int, string) 
 			} else {
 				''
 			}
-			mut rows := []string{}
+			// Build the array directly: no slice of row strings and no join copy.
+			mut rows := strings.new_builder(512)
+			rows.write_byte(`[`)
+			mut first_row := true
 			for gid in m.order {
 				d := m.downloads[gid]
 				if wanted != '' && d.status != wanted {
@@ -525,9 +541,18 @@ fn (mut m Manager) dispatch(method string, p []json2.Any) (string, int, string) 
 				if wanted == '' && d.status in ['active', 'paused', 'waiting'] {
 					continue
 				}
-				rows << m.status_json(gid)
+				if !first_row {
+					rows.write_byte(`,`)
+				}
+				first_row = false
+				rows.write_string(m.status_json(gid))
 			}
-			return '[' + rows.join(',') + ']', 0, ''
+			rows.write_byte(`]`)
+			result_json := rows.str()
+			unsafe {
+				rows.free()
+			}
+			return result_json, 0, ''
 		}
 		'aria2.pause', 'aria2.unpause' {
 			gid := any_str(field_from(p, 0))
