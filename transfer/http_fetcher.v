@@ -12,10 +12,16 @@ import net.http
 import net.urllib
 import os
 
+struct RobotsRules {
+	allow    string
+	disallow string
+}
+
 pub struct HttpState {
 mut:
 	cookies map[string]string
-	robots  map[string]bool
+	// One entry per host, not per path: robots.txt does not change between URLs.
+	robots map[string]RobotsRules
 }
 
 pub struct HttpFetcher {
@@ -27,16 +33,16 @@ pub fn new_http_fetcher() &HttpFetcher {
 	return &HttpFetcher{
 		state: &HttpState{
 			cookies: map[string]string{}
-			robots:  map[string]bool{}
+			robots:  map[string]RobotsRules{}
 		}
 	}
 }
 
-fn (mut s HttpState) remember(key string, value bool) {
-	s.robots[key] = value
+fn (mut s HttpState) remember(key string, rules RobotsRules) {
+	s.robots[key] = rules
 }
 
-fn (s &HttpState) allowed(key string) ?bool {
+fn (s &HttpState) allowed(key string) ?RobotsRules {
 	if key in s.robots {
 		return s.robots[key] or { return none }
 	}
@@ -67,30 +73,48 @@ fn path_of(url string) string {
 	return rest[slash..]
 }
 
-// robots_allowed applies the User-agent: fluxdl / * rules from /robots.txt.
+// robots_allowed caches parsed rules per host, so a second URL on the same
+// origin never fetches /robots.txt again.
 fn robots_allowed(state &HttpState, url string) !bool {
 	origin := origin_of(url) or { return true }
 	path := path_of(url)
-	key := origin + path
-	if cached := state.allowed(key) {
-		return cached
+	mut rules := RobotsRules{}
+	if cached := state.allowed(origin) {
+		rules = cached
+	} else {
+		rules = parse_robots(origin)
+		state.remember(origin, rules)
 	}
-	robots_url := origin + '/robots.txt'
+	if rules.disallow == '' {
+		return true
+	}
+	if !path.starts_with(rules.disallow) {
+		return true
+	}
+	// Longest matching prefix wins over a shorter Disallow.
+	return rules.allow != '' && path.starts_with(rules.allow) && rules.allow.len > rules.disallow.len
+}
+
+fn parse_robots(origin string) RobotsRules {
 	response := http.fetch(
 		method:               .get
-		url:                  robots_url
+		url:                  origin + '/robots.txt'
 		validate:             true
 		stop_receiving_limit: 65536
 	) or {
-		return true
+		return RobotsRules{}
 	}
 	if response.status_code != 200 {
-		return true
+		return RobotsRules{}
 	}
+	return parse_robots_text(response.body)
+}
+
+fn parse_robots_text(body string) RobotsRules {
 	mut applies := false
-	mut allow_len := -1
-	mut disallow_len := -1
-	for raw in response.body.split_into_lines() {
+	mut allow := ''
+	mut disallow := ''
+	for raw in body.split_into_lines() {
 		line := raw.trim_space()
 		if line.starts_with('#') || line == '' {
 			continue
@@ -105,16 +129,14 @@ fn robots_allowed(state &HttpState, url string) !bool {
 		if !applies {
 			continue
 		}
-		if name == 'allow' && value.len > allow_len && path.starts_with(value) {
-			allow_len = value.len
+		if name == 'allow' && value.len > allow.len {
+			allow = value
 		}
-		if name == 'disallow' && value != '' && value.len > disallow_len && path.starts_with(value) {
-			disallow_len = value.len
+		if name == 'disallow' && value != '' && value.len > disallow.len {
+			disallow = value
 		}
 	}
-	decision := if disallow_len < 0 { true } else { allow_len >= disallow_len }
-	state.remember(key, decision)
-	return decision
+	return RobotsRules{ allow: allow, disallow: disallow }
 }
 
 // head probes one byte to learn the length and whether Range is honoured.

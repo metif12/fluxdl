@@ -7,6 +7,11 @@ import os
 
 const peer_id = '-FLUX01-000000000000'
 
+struct PieceScore {
+	index int
+	count int
+}
+
 // download fetches a .torrent into dir and returns the completed file path.
 // resolve_magnet asks tracker peers for the info dictionary over ut_metadata.
 pub fn resolve_magnet(magnet &Torrent) !&Torrent {
@@ -96,20 +101,19 @@ pub fn download(t &Torrent, dir string) !string {
 			}
 		}
 	}
-	mut order := []int{}
+	// Sort once by availability: O(n log n) instead of a selection sort over
+	// every piece pair, which matters for torrents with tens of thousands of
+	// pieces.
+	mut scored := []PieceScore{}
 	for i := 0; i < meta.pieces.len; i++ {
-		order << i
+		scored << PieceScore{ index: i, count: availability[i] }
 	}
-	for i := 0; i < order.len; i++ {
-		mut best := i
-		for j := i + 1; j < order.len; j++ {
-			if availability[order[j]] < availability[order[best]] {
-				best = j
-			}
-		}
-		tmp := order[i]
-		order[i] = order[best]
-		order[best] = tmp
+	scored.sort_with_compare(fn (a &PieceScore, b &PieceScore) int {
+		return a.count - b.count
+	})
+	mut order := []int{}
+	for item in scored {
+		order << item.index
 	}
 
 	mut file := os.open_file(path, 'r+b')!

@@ -46,53 +46,85 @@ pub fn new_dht() &Dht {
 	return &Dht{ id: id, tid: 1 }
 }
 
-// find_peers walks bootstrap nodes for peers advertising info_hash.
+struct DhtReply {
+	addr  string
+	value ?BValue
+}
+
+fn query_async(addr string, payload string, ch chan DhtReply) {
+	value := dht_query(addr, payload) or {
+		ch <- DhtReply{ addr: addr }
+		return
+	}
+	ch <- DhtReply{ addr: addr, value: value }
+}
+
+fn collect_reply(reply BValue, mut peers []Peer, mut queue []string, seen map[string]bool) {
+	root := match reply {
+		map[string]BValue {
+			reply
+		}
+		else {
+			return
+		}
+	}
+	response := get(root, 'r') or { return }
+	if response is map[string]BValue {
+		if values := get(response, 'values') {
+			if values is []BValue {
+				for value in values {
+					if value is string {
+						peers << parse_compact_peers(value.bytes()) or { [] }
+					}
+				}
+			}
+		}
+		if nodes := get(response, 'nodes') {
+			if nodes is string {
+				raw := nodes
+				for i := 0; i + 26 <= raw.len; i += 26 {
+					ip := '${u8(raw[i + 20])}.${u8(raw[i + 21])}.${u8(raw[i + 22])}.${u8(raw[i + 23])}'
+					port := (int(u8(raw[i + 24])) << 8) | int(u8(raw[i + 25]))
+					next := '${ip}:${port}'
+					if !seen[next] {
+						queue << next
+					}
+				}
+			}
+		}
+	}
+}
+
+// find_peers walks bootstrap nodes for peers advertising info_hash. Up to eight
+// KRPC queries run at once; a slow node no longer serialises the whole lookup.
 pub fn (mut d Dht) find_peers(info_hash []u8) ![]Peer {
 	mut queue := dht_bootstrap.clone()
 	mut seen := map[string]bool{}
 	mut peers := []Peer{}
 	for round := 0; round < 4 && queue.len > 0; round++ {
-		addr := queue.pop()
-		if seen[addr] {
-			continue
-		}
-		seen[addr] = true
-		d.tid++
-		tid := '${d.tid % 256}'
-		payload := 'd1:t2:${tid}1:y1:q1:q9:get_peers1:ad2:id' + bstr(d.id) +
-			'9:info_hash' + bstr(info_hash) + 'ee'
-		reply := dht_query(addr, payload) or { continue }
-		root := match reply {
-			map[string]BValue {
-				reply
-			}
-			else {
-				continue
+		mut batch := []string{}
+		for batch.len < 8 && queue.len > 0 {
+			addr := queue.pop()
+			if !seen[addr] {
+				seen[addr] = true
+				batch << addr
 			}
 		}
-		response := get(root, 'r') or { continue }
-		if response is map[string]BValue {
-			if values := get(response, 'values') {
-				if values is []BValue {
-					for value in values {
-						if value is string {
-							peers << parse_compact_peers(value.bytes()) or { [] }
-						}
-					}
-				}
-			}
-			if nodes := get(response, 'nodes') {
-				if nodes is string {
-					raw := nodes
-					for i := 0; i + 26 <= raw.len; i += 26 {
-						ip := '${u8(raw[i + 20])}.${u8(raw[i + 21])}.${u8(raw[i + 22])}.${u8(raw[i + 23])}'
-						port := (int(u8(raw[i + 24])) << 8) | int(u8(raw[i + 25]))
-						next := '${ip}:${port}'
-						if !seen[next] {
-							queue << next
-						}
-					}
-				}
+		if batch.len == 0 {
+			break
+		}
+		ch := chan DhtReply{cap: batch.len}
+		for addr in batch {
+			d.tid++
+			tid := '${d.tid % 256}'
+			payload := 'd1:t2:${tid}1:y1:q1:q9:get_peers1:ad2:id' + bstr(d.id) +
+				'9:info_hash' + bstr(info_hash) + 'ee'
+			go query_async(addr, payload, ch)
+		}
+		for _ in batch {
+			reply := <-ch
+			if value := reply.value {
+				collect_reply(value, mut peers, mut queue, seen)
 			}
 		}
 	}
