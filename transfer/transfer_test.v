@@ -138,6 +138,12 @@ fn test_download_with_meta_does_not_probe_a_second_time() {
 	assert heads == 1, 'the transfer probed a second time: ${heads}'
 }
 
+fn test_cookie_jar_keeps_the_first_name_value_pair() {
+	state := &HttpState{ cookies: map[string]string{}, robots: map[string]bool{} }
+	state.store_cookie('sid=abc123; Path=/; HttpOnly')
+	assert state.cookies['sid'] == 'abc123', state.cookies['sid']
+}
+
 fn test_a_single_segment_transfer_uses_the_fast_path() {
 	p := scratch('single.bin')
 	mut f := &FakeFetcher{}

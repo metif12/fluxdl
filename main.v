@@ -13,6 +13,7 @@ import fluxdl.link
 import fluxdl.metalink
 import fluxdl.plan
 import fluxdl.rpc
+import fluxdl.sftp
 import fluxdl.torrent
 import fluxdl.session
 import fluxdl.transfer
@@ -197,7 +198,13 @@ fn cmd_download(args []string) {
 	}
 	path := os.join_path(dir, out)
 
-	fetcher := if url.starts_with('ftp://') { ftp.new_fetcher() } else { &transfer.HttpFetcher{} }
+	fetcher := if url.starts_with('ftp://') {
+		ftp.new_fetcher()
+	} else if url.starts_with('sftp://') {
+		sftp.new_fetcher()
+	} else {
+		transfer.new_http_fetcher()
+	}
 	meta := fetcher.head(url) or {
 		eprintln('fluxdl: ${err.msg()}')
 		exit(1)

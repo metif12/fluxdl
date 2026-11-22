@@ -11,6 +11,7 @@ import fluxdl.ftp
 import fluxdl.link
 import fluxdl.metalink
 import fluxdl.session
+import fluxdl.sftp
 import fluxdl.torrent
 import fluxdl.transfer
 import fluxdl.util
@@ -100,7 +101,7 @@ pub fn new_manager(secret string, session_path string) &Manager {
 		options:      opts
 		session_path: session_path
 		secret:       secret
-		fetcher:      &transfer.HttpFetcher{}
+		fetcher:      transfer.new_http_fetcher()
 		status_cache: map[string]StatusCache{}
 		cancels:      map[string]&transfer.Cancel{}
 		auto_start:   true
@@ -825,6 +826,9 @@ fn (mut m Manager) dispatch(method string, p []json2.Any) (string, int, string) 
 fn (m &Manager) fetcher_for(url string) &transfer.Fetcher {
 	if url.starts_with('ftp://') {
 		return ftp.new_fetcher()
+	}
+	if url.starts_with('sftp://') {
+		return sftp.new_fetcher()
 	}
 	return m.fetcher
 }

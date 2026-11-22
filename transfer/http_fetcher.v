@@ -9,9 +9,113 @@ module transfer
 import fluxdl.plan
 import fluxdl.util
 import net.http
+import net.urllib
 import os
 
-pub struct HttpFetcher {}
+pub struct HttpState {
+mut:
+	cookies map[string]string
+	robots  map[string]bool
+}
+
+pub struct HttpFetcher {
+	state &HttpState
+}
+
+// new_http_fetcher creates a fetcher with a cookie jar and robots cache.
+pub fn new_http_fetcher() &HttpFetcher {
+	return &HttpFetcher{
+		state: &HttpState{
+			cookies: map[string]string{}
+			robots:  map[string]bool{}
+		}
+	}
+}
+
+fn (mut s HttpState) remember(key string, value bool) {
+	s.robots[key] = value
+}
+
+fn (s &HttpState) allowed(key string) ?bool {
+	if key in s.robots {
+		return s.robots[key] or { return none }
+	}
+	return none
+}
+
+fn (mut s HttpState) store_cookie(header string) {
+	first := header.split(';')[0]
+	parts := first.split('=')
+	if parts.len < 2 || parts[0].trim_space() == '' {
+		return
+	}
+	s.cookies[parts[0].trim_space()] = parts[1..].join('=').trim_space()
+}
+
+fn origin_of(url string) !string {
+	parsed := urllib.parse(url) or { return error('transfer: bad URL ${url}') }
+	port_text := parsed.port()
+	scheme := parsed.scheme
+	default_port := if scheme == 'https' { '443' } else { '80' }
+	p := if port_text == '' { default_port } else { port_text }
+	return '${scheme}://${parsed.host}:${p}'
+}
+
+fn path_of(url string) string {
+	rest := url[url.index('://') or { return '/' } + 3..]
+	slash := rest.index('/') or { return '/' }
+	return rest[slash..]
+}
+
+// robots_allowed applies the User-agent: fluxdl / * rules from /robots.txt.
+fn robots_allowed(state &HttpState, url string) !bool {
+	origin := origin_of(url) or { return true }
+	path := path_of(url)
+	key := origin + path
+	if cached := state.allowed(key) {
+		return cached
+	}
+	robots_url := origin + '/robots.txt'
+	response := http.fetch(
+		method:               .get
+		url:                  robots_url
+		validate:             true
+		stop_receiving_limit: 65536
+	) or {
+		return true
+	}
+	if response.status_code != 200 {
+		return true
+	}
+	mut applies := false
+	mut allow_len := -1
+	mut disallow_len := -1
+	for raw in response.body.split_into_lines() {
+		line := raw.trim_space()
+		if line.starts_with('#') || line == '' {
+			continue
+		}
+		colon := line.index(':') or { continue }
+		name := line[..colon].trim_space().to_lower()
+		value := line[colon + 1..].trim_space().to_lower()
+		if name == 'user-agent' {
+			applies = value == '*' || value.contains('fluxdl')
+			continue
+		}
+		if !applies {
+			continue
+		}
+		if name == 'allow' && value.len > allow_len && path.starts_with(value) {
+			allow_len = value.len
+		}
+		if name == 'disallow' && value != '' && value.len > disallow_len && path.starts_with(value) {
+			disallow_len = value.len
+		}
+	}
+	decision := if disallow_len < 0 { true } else { allow_len >= disallow_len }
+	state.remember(key, decision)
+	return decision
+}
 
 // head probes one byte to learn the length and whether Range is honoured.
 //
@@ -20,6 +124,10 @@ pub struct HttpFetcher {}
 // get Content-Length, and report ranges = false so the manager collapses to a
 // single connection. The probe body is capped at 64 bytes.
 pub fn (f HttpFetcher) head(url string) !Meta {
+	allowed := robots_allowed(f.state, url) or { true }
+	if !allowed {
+		return error('transfer: robots.txt disallows ${url}')
+	}
 	mut h := http.Header{}
 	h.set(.range, 'bytes=0-0')
 	// stop_receiving_limit matters when the server ignores Range: without it,
@@ -31,8 +139,12 @@ pub fn (f HttpFetcher) head(url string) !Meta {
 		header:               h
 		validate:             true
 		stop_copying_limit:   64
+		cookies:              f.state.cookies
 		stop_receiving_limit: 64
 	)!
+	if cookie := res.header.get_custom('set-cookie') {
+		f.state.store_cookie(cookie)
+	}
 	if res.status_code == 206 {
 		cr := res.header.get(.content_range) or {
 			return error('transfer: a 206 without Content-Range from ${url}')
@@ -64,6 +176,10 @@ pub fn (f HttpFetcher) head(url string) !Meta {
 // FetchConfig.on_progress_body directly receives every body chunk with its
 // status code, so we can accept 206 and still never write a redirect body.
 pub fn (f HttpFetcher) fetch(url string, seg plan.Segment, path string) !i64 {
+	allowed := robots_allowed(f.state, url) or { true }
+	if !allowed {
+		return error('transfer: robots.txt disallows ${url}')
+	}
 	mut h := http.Header{}
 	h.set(.range, seg.range_header())
 	mut w := &ChunkWriter{ file: os.open_file(path, 'r+b')! }
@@ -77,9 +193,13 @@ pub fn (f HttpFetcher) fetch(url string, seg plan.Segment, path string) !i64 {
 		header:             h
 		validate:           true
 		user_ptr:           voidptr(w)
+		cookies:            f.state.cookies
 		on_progress_body:   write_chunk
 		stop_copying_limit: 64
 	)!
+	if cookie := res.header.get_custom('set-cookie') {
+		f.state.store_cookie(cookie)
+	}
 	if res.status_code != 200 && res.status_code != 206 {
 		return error('transfer: HTTP ${res.status_code} for ${seg.range_header()}')
 	}
