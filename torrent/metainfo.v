@@ -8,6 +8,7 @@ module torrent
 import crypto.sha1
 import encoding.base32
 import encoding.hex
+import net.urllib
 import strings
 
 pub type BValue = i64 | string | []BValue | map[string]BValue
@@ -259,6 +260,7 @@ pub fn parse_magnet(uri string) !Torrent {
 	q := uri.index('?') or { return error('torrent: magnet has no query') }
 	mut hash_hex := ''
 	mut name := ''
+	mut tracker := ''
 	for pair in uri[q + 1..].split('&') {
 		parts := pair.split('=')
 		if parts.len != 2 {
@@ -280,6 +282,9 @@ pub fn parse_magnet(uri string) !Torrent {
 		if parts[0] == 'dn' {
 			name = percent_decode(parts[1])
 		}
+		if parts[0] == 'tr' && tracker == '' {
+			tracker = urllib.query_unescape(parts[1]) or { parts[1] }
+		}
 	}
 	if hash_hex.len != 40 {
 		return error('torrent: magnet has no btih')
@@ -288,7 +293,7 @@ pub fn parse_magnet(uri string) !Torrent {
 		name = hash_hex
 	}
 	return Torrent{
-		announce:      ''
+		announce:      tracker
 		name:          name
 		piece_length:  0
 		pieces:        []

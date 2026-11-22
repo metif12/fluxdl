@@ -8,27 +8,58 @@ import os
 const peer_id = '-FLUX01-000000000000'
 
 // download fetches a .torrent into dir and returns the completed file path.
+// resolve_magnet asks tracker peers for the info dictionary over ut_metadata.
+pub fn resolve_magnet(magnet &Torrent) !&Torrent {
+	mut peers := []Peer{}
+	if magnet.announce != '' {
+		peers = announce(magnet.announce, magnet.info_hash_raw, peer_id, 6881, 0) or { [] }
+	}
+	if peers.len == 0 {
+		mut dht := new_dht()
+		peers = dht.find_peers(magnet.info_hash_raw) or { [] }
+	}
+	if peers.len == 0 {
+		return error('torrent: no peers from tracker or DHT for magnet')
+	}
+	for peer in peers {
+		mut conn := handshake(peer, magnet.info_hash_raw, peer_id) or { continue }
+		metadata := fetch_metadata(mut conn, magnet.info_hash_raw) or {
+			conn.close()
+			continue
+		}
+		conn.close()
+		parsed := parse(metadata) or { continue }
+		if parsed.info_hash_raw.bytestr() == magnet.info_hash_raw.bytestr() {
+			return &parsed
+		}
+	}
+	return error('torrent: no peer supplied valid metadata')
+}
+
 pub fn download(t &Torrent, dir string) !string {
-	if t.announce == '' {
-		return error('torrent: no tracker; DHT discovery is not implemented')
-	}
-	if t.pieces.len == 0 {
-		return error('torrent: no piece hashes; magnet metadata exchange is not implemented')
-	}
-	path := os.join_path(dir, link.safe_name(t.name))
+	meta := if t.pieces.len == 0 { resolve_magnet(t) or { return err } } else { t }
+	path := os.join_path(dir, link.safe_name(meta.name))
 	if !os.exists(path) {
 		os.create(path)!
 	}
-	if os.file_size(path) != t.length {
-		os.truncate(path, u64(t.length))!
+	if os.file_size(path) != meta.length {
+		os.truncate(path, u64(meta.length))!
 	}
 
-	peers := announce(t.announce, t.info_hash_raw, peer_id, 6881, t.length) or {
-		return error('torrent: announce failed: ${err.msg()}')
+	mut peers := []Peer{}
+	if meta.announce != '' {
+		peers = announce(meta.announce, meta.info_hash_raw, peer_id, 6881, meta.length) or { [] }
+	}
+	if peers.len == 0 {
+		mut dht := new_dht()
+		peers = dht.find_peers(meta.info_hash_raw) or { [] }
+	}
+	if peers.len == 0 {
+		return error('torrent: no peers from tracker or DHT')
 	}
 	mut conns := []&Conn{}
 	for peer in peers {
-		conn := handshake(peer, t.info_hash_raw, peer_id) or { continue }
+		conn := handshake(peer, meta.info_hash_raw, peer_id) or { continue }
 		conn.wait_until_unchoke() or {
 			conn.close()
 			continue
@@ -39,17 +70,34 @@ pub fn download(t &Torrent, dir string) !string {
 		return error('torrent: no usable peers')
 	}
 
+	// PEX: peers met through the extension protocol join the same pool.
+	mut discovered := []Peer{}
+	for conn in conns {
+		discovered << conn.pex_peers
+	}
+	for peer in discovered {
+		if conns.len >= 30 {
+			break
+		}
+		conn := handshake(peer, meta.info_hash_raw, peer_id) or { continue }
+		conn.wait_until_unchoke() or {
+			conn.close()
+			continue
+		}
+		conns << conn
+	}
+
 	// Rarest-first: a piece held by fewer peers is fetched earlier.
 	mut availability := map[int]int{}
 	for conn in conns {
-		for i := 0; i < t.pieces.len; i++ {
+		for i := 0; i < meta.pieces.len; i++ {
 			if conn.has_piece(i) {
 				availability[i]++
 			}
 		}
 	}
 	mut order := []int{}
-	for i := 0; i < t.pieces.len; i++ {
+	for i := 0; i < meta.pieces.len; i++ {
 		order << i
 	}
 	for i := 0; i < order.len; i++ {
@@ -77,8 +125,8 @@ pub fn download(t &Torrent, dir string) !string {
 			if !conn.has_piece(index) {
 				continue
 			}
-			data := conn.piece(t, index) or { continue }
-			file.seek(i64(index) * i64(t.piece_length), .start)!
+			data := conn.piece(meta, index) or { continue }
+			file.seek(i64(index) * i64(meta.piece_length), .start)!
 			file.write(data)!
 			saved = true
 			break

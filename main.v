@@ -38,6 +38,9 @@ fn usage() {
   fluxdl torrent <path> [-d dir]
       Download a .torrent over HTTP trackers and the peer wire protocol.
 
+  fluxdl seed <path> [-d dir] [-p port]
+      Serve a completed torrent to inbound peers.
+
   fluxdl metalink <path>
       Print the files, URLs and hashes a Metalink document declares.
 
@@ -65,6 +68,7 @@ fn main() {
 		'download' { cmd_download(args[2..]) }
 		'metalink' { cmd_metalink(args[2..]) }
 		'torrent' { cmd_torrent(args[2..]) }
+		'seed' { cmd_seed(args[2..]) }
 		'serve' { cmd_serve(args[2..]) }
 		else {
 			usage()
@@ -212,6 +216,42 @@ fn cmd_download(args []string) {
 		exit(1)
 	}
 	println('${path}: ${progress.value} of ${meta.length} bytes (${n} fetched this run)')
+}
+
+fn cmd_seed(args []string) {
+	if args.len < 1 {
+		eprintln('seed needs a .torrent path')
+		exit(1)
+	}
+	mut dir := os.getenv('FLUXDL_DIR')
+	if dir == '' {
+		dir = os.getwd()
+	}
+	mut port := 6881
+	mut i := 1
+	for i < args.len {
+		if args[i] == '-d' && i + 1 < args.len {
+			i++
+			dir = args[i]
+		} else if args[i] == '-p' && i + 1 < args.len {
+			i++
+			port = args[i].int()
+		}
+		i++
+	}
+	raw := os.read_file(args[0]) or {
+		eprintln('fluxdl: ${err.msg()}')
+		exit(1)
+	}
+	meta := torrent.parse(raw.bytes()) or {
+		eprintln('fluxdl: ${err.msg()}')
+		exit(1)
+	}
+	println('seeding ${meta.name} on ${port}')
+	torrent.seed(meta, dir, port) or {
+		eprintln('fluxdl: ${err.msg()}')
+		exit(1)
+	}
 }
 
 fn cmd_torrent(args []string) {

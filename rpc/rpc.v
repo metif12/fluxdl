@@ -765,9 +765,6 @@ fn (mut m Manager) dispatch(method string, p []json2.Any) (string, int, string) 
 			meta := torrent.parse_magnet(uri) or {
 				return 'null', -32000, err.msg()
 			}
-			if meta.pieces.len == 0 {
-				return 'null', -32000, 'magnet metadata exchange is not implemented'
-			}
 			mut opts := map[string]string{}
 			if p.len > 1 {
 				opts = string_map(p[1])

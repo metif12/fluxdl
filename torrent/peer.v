@@ -15,9 +15,10 @@ pub:
 
 pub struct Conn {
 mut:
-	conn     &net.TcpConn
-	bitfield []u8
-	choked   bool = true
+	conn      &net.TcpConn
+	bitfield  []u8
+	choked    bool = true
+	pex_peers []Peer
 }
 
 fn be32(data []u8) int {
@@ -40,7 +41,11 @@ pub fn handshake(peer Peer, info_hash []u8, peer_id string) !&Conn {
 	mut msg := []u8{}
 	msg << u8(19)
 	msg << 'BitTorrent protocol'.bytes()
-	msg << []u8{len: 8}
+	// Bit 4 of the fifth reserved byte advertises the extension protocol
+	// (BEP 10), which magnet metadata and PEX both travel over.
+	mut reserved := []u8{len: 8}
+	reserved[5] = 0x10
+	msg << reserved
 	msg << info_hash
 	msg << peer_id.bytes()
 	socket.write(msg)!
@@ -86,7 +91,11 @@ pub fn (mut c Conn) next_message() !Message {
 	}
 	mut body := []u8{len: length}
 	c.read_exact(mut body)!
-	return Message{ id: body[0], payload: body[1..] }
+	if body[0] == u8(20) {
+		discovered := parse_pex(body[1..]) or { [] }
+		c.pex_peers << discovered
+	}
+	return Message{ id: body[0], payload: body[1..].clone() }
 }
 
 fn (mut c Conn) send_message(id u8, payload []u8) ! {

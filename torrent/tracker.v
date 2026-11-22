@@ -10,6 +10,21 @@ pub:
 	port int
 }
 
+// parse_compact_peers decodes 6-byte IP/port pairs from a tracker or PEX list.
+pub fn parse_compact_peers(raw []u8) ![]Peer {
+	if raw.len % 6 != 0 {
+		return error('torrent: malformed compact peer list')
+	}
+	mut out := []Peer{}
+	for i := 0; i < raw.len; i += 6 {
+		out << Peer{
+			ip:   '${u8(raw[i])}.${u8(raw[i + 1])}.${u8(raw[i + 2])}.${u8(raw[i + 3])}'
+			port: (int(u8(raw[i + 4])) << 8) | int(u8(raw[i + 5]))
+		}
+	}
+	return out
+}
+
 // announce asks an HTTP tracker for peers. Only compact and dictionary-style
 // peer lists are understood; a malformed response is an error.
 pub fn announce(announce_url string, info_hash []u8, peer_id string, port int, left i64) ![]Peer {
@@ -41,16 +56,7 @@ pub fn announce(announce_url string, info_hash []u8, peer_id string, port int, l
 	mut out := []Peer{}
 	match peers_value {
 		string {
-			raw := peers_value
-			if raw.len % 6 != 0 {
-				return error('torrent: malformed compact peer list')
-			}
-			for i := 0; i < raw.len; i += 6 {
-				out << Peer{
-					ip:   '${u8(raw[i])}.${u8(raw[i + 1])}.${u8(raw[i + 2])}.${u8(raw[i + 3])}'
-					port: (int(u8(raw[i + 4])) << 8) | int(u8(raw[i + 5]))
-				}
-			}
+			out << parse_compact_peers(peers_value.bytes()) or { return err }
 		}
 		[]BValue {
 			for item in peers_value {
