@@ -134,7 +134,7 @@ bugs are found without a network.
 ## Testing
 
 ```powershell
-v test .                  # 66 tests across five module test files
+v test .                  # 72 tests across six module test files
 v fmt -w .                # v fmt is law
 ```
 

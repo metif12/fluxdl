@@ -15,6 +15,11 @@ and what Fluxget parses.
 Start the server with `fluxdl serve --secret <token>`. With no secret configured,
 the token argument is optional.
 
+The live queue is capped at 10,000 downloads; an `addUri` past that limit returns
+a JSON-RPC error. `pause` and `remove` signal the worker's cancellation token, so
+a transfer stops at the next segment boundary and a removed row is never
+recreated by its worker.
+
 ## Methods
 
 ### Downloads

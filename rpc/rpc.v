@@ -9,12 +9,16 @@ module rpc
 import fluxdl.link
 import fluxdl.session
 import fluxdl.transfer
+import fluxdl.util
 import json2
 import os
 import strings
 import sync
 
 pub const version = '0.4.0'
+
+// max_downloads bounds the live queue, the same ceiling the session reader uses.
+const max_downloads = 10000
 
 // Download is one row of the queue, in the fields aria2's tellStatus uses.
 pub struct Download {
@@ -44,7 +48,8 @@ struct StatusCache {
 }
 
 // Manager owns the queue and the settings document. It is shared by the HTTP
-// server's worker threads, so every read and write of its maps takes mu.
+// server's worker threads: map reads and writes take mu. Workers snapshot the
+// values they need under mu and never read a map after releasing it.
 pub struct Manager {
 pub mut:
 	mu           sync.Mutex
@@ -55,6 +60,7 @@ pub mut:
 	secret       string
 	fetcher      &transfer.Fetcher
 	status_cache map[string]StatusCache
+	cancels      map[string]&transfer.Cancel
 	// Global results are cached the same way as rows: a version bump on any
 	// queue or settings mutation is the only thing that invalidates them.
 	queue_version   int
@@ -87,6 +93,7 @@ pub fn new_manager(secret string, session_path string) &Manager {
 		secret:       secret
 		fetcher:      &transfer.HttpFetcher{}
 		status_cache: map[string]StatusCache{}
+		cancels:      map[string]&transfer.Cancel{}
 		auto_start:   true
 	}
 }
@@ -233,7 +240,7 @@ fn null_id() json2.Any {
 struct RpcRequest {
 	method string
 	params []json2.Any = []
-	id     json2.Any   = json2.Any(json2.Null{})
+	id     ?json2.Any
 }
 
 // handle_payload answers one JSON-RPC request body.
@@ -249,12 +256,14 @@ pub fn (mut m Manager) handle_payload(raw string) string {
 	if method == '' {
 		return fail(null_id(), -32600, 'Invalid Request')
 	}
-	id := req.id
+	// A request without an id is a JSON-RPC notification: do not answer it.
+	// An empty response is the signal the HTTP handler turns into 204.
+	id := req.id or { return '' }
 	params := req.params
 
 	if m.secret != '' {
 		provided := if params.len > 0 { any_str(params[0]) } else { '' }
-		if !provided.starts_with('token:') || provided[6..] != m.secret {
+		if !provided.starts_with('token:') || !util.secure_equal(provided[6..], m.secret) {
 			return fail(id, -32000, 'Unauthorized')
 		}
 	}
@@ -459,7 +468,10 @@ fn (mut m Manager) dispatch(method string, p []json2.Any) (string, int, string) 
 			if p.len > 1 {
 				opts = string_map(p[1])
 			}
-			return json2.encode(m.add(uris, opts)), 0, ''
+			gid := m.add(uris, opts) or {
+				return '""', -32000, err.msg()
+			}
+			return json2.encode(gid), 0, ''
 		}
 		'aria2.tellStatus' {
 			m.mu.lock()
@@ -515,6 +527,9 @@ fn (mut m Manager) dispatch(method string, p []json2.Any) (string, int, string) 
 			d.version++
 			m.queue_version++
 			m.downloads[gid] = d
+			if d.status == 'paused' && gid in m.cancels {
+				(m.cancels[gid] or { &transfer.Cancel{} }).stop()
+			}
 			return json2.encode(gid), 0, ''
 		}
 		'aria2.pauseAll', 'aria2.unpauseAll' {
@@ -529,6 +544,9 @@ fn (mut m Manager) dispatch(method string, p []json2.Any) (string, int, string) 
 					d.status = new_status
 					d.version++
 					m.downloads[gid] = d
+					if new_status == 'paused' && gid in m.cancels {
+						(m.cancels[gid] or { &transfer.Cancel{} }).stop()
+					}
 				}
 			}
 			m.queue_version++
@@ -548,10 +566,14 @@ fn (mut m Manager) dispatch(method string, p []json2.Any) (string, int, string) 
 			d.version++
 			m.queue_version++
 			m.downloads[gid] = d
+			if gid in m.cancels {
+				(m.cancels[gid] or { &transfer.Cancel{} }).stop()
+			}
 			if method == 'aria2.removeDownloadResult' {
 				m.order = m.order.filter(|it| it != gid)
 				m.downloads.delete(gid)
 				m.status_cache.delete(gid)
+				m.cancels.delete(gid)
 			}
 			return json2.encode(gid), 0, ''
 		}
@@ -723,8 +745,12 @@ fn (mut m Manager) dispatch(method string, p []json2.Any) (string, int, string) 
 
 // ---- queue mechanics -----------------------------------------------------
 
-fn (mut m Manager) add(uris []string, opts map[string]string) string {
+fn (mut m Manager) add(uris []string, opts map[string]string) !string {
 	m.mu.lock()
+	if m.order.len >= max_downloads {
+		m.mu.unlock()
+		return error('queue full')
+	}
 	m.counter++
 	mut gid := m.counter.str()
 	for gid.len < 16 {
@@ -742,6 +768,7 @@ fn (mut m Manager) add(uris []string, opts map[string]string) string {
 	}
 	m.downloads[gid] = d
 	m.order << gid
+	m.cancels[gid] = &transfer.Cancel{}
 	m.queue_version++
 	m.mu.unlock()
 	if m.auto_start {
@@ -751,53 +778,87 @@ fn (mut m Manager) add(uris []string, opts map[string]string) string {
 }
 
 fn (mut m Manager) run(gid string) {
+	// Snapshot everything under one lock. Nothing below reads a Manager map
+	// again, so changeOption/changeGlobalOption cannot race with this worker.
+	mut uri := ''
+	mut dir := ''
+	mut out := ''
+	mut conn_opt := ''
+	mut min_opt := ''
+	mut cancel := &transfer.Cancel{}
 	m.mu.lock()
-	d := m.downloads[gid]
-	m.mu.unlock()
-
-	mut dir := d.options['dir']
-	if dir == '' {
-		dir = m.options['dir']
+	if gid in m.downloads {
+		d := m.downloads[gid]
+		uri = d.uri
+		dir = d.options['dir']
+		if dir == '' {
+			dir = m.options['dir']
+		}
+		out = d.options['out']
+		conn_opt = d.options['max-connection-per-server']
+		min_opt = d.options['min-split-size']
 	}
-	mut out := d.options['out']
+	if gid in m.cancels {
+		cancel = m.cancels[gid] or { &transfer.Cancel{} }
+	}
+	m.mu.unlock()
+	if cancel.is_stopped() {
+		return
+	}
+
 	if out == '' {
-		l := link.parse(d.uri) or {
+		l := link.parse(uri) or {
 			m.set_error(gid, 1, err.msg())
 			return
 		}
 		out = link.safe_name(l.name)
 	}
 	path := os.join_path(dir, out)
-	meta := m.fetcher.head(d.uri) or {
-		m.set_error(gid, 1, err.msg())
+	meta := m.fetcher.head(uri) or {
+		if !cancel.is_stopped() {
+			m.set_error(gid, 1, err.msg())
+		}
+		return
+	}
+	if cancel.is_stopped() {
 		return
 	}
 	m.set_started(gid, meta.length, path, dir, out)
 
-	mut conn := 4
-	if d.options['max-connection-per-server'] != '' {
-		conn = d.options['max-connection-per-server'].int()
-	}
-	mut min_seg := i64(0)
-	if d.options['min-split-size'] != '' {
-		min_seg = d.options['min-split-size'].i64()
-	}
+	conn := util.int_or(conn_opt, 4)
+	min_seg := util.i64_or(min_opt, 0)
 	mut progress := &transfer.Progress{}
-	transfer.download_with_meta(d.uri, meta, meta.length, 0, path, transfer.Options{
+	transfer.download_with_meta(uri, meta, meta.length, 0, path, transfer.Options{
 		connections: conn
 		min_segment: min_seg
+		cancel:      cancel
 	}, m.fetcher, mut progress) or {
-		m.set_error(gid, 1, err.msg())
+		if !cancel.is_stopped() {
+			m.set_error(gid, 1, err.msg())
+		}
 		return
 	}
+	if cancel.is_stopped() {
+		return
+	}
+
 	m.mu.lock()
+	defer {
+		m.mu.unlock()
+	}
+	// A removed or paused row must never be resurrected or completed.
+	if gid !in m.downloads {
+		return
+	}
 	mut cur := m.downloads[gid]
+	if cur.status != 'active' {
+		return
+	}
 	cur.status = 'complete'
 	cur.completed = cur.total
 	cur.version++
 	m.queue_version++
 	m.downloads[gid] = cur
-	m.mu.unlock()
 }
 
 fn (mut m Manager) set_started(gid string, total i64, path string, dir string, out string) {

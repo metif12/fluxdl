@@ -7,6 +7,7 @@
 module transfer
 
 import fluxdl.plan
+import fluxdl.util
 import net.http
 import os
 
@@ -40,7 +41,7 @@ pub fn (f HttpFetcher) head(url string) !Meta {
 		if slash < 0 {
 			return error('transfer: malformed Content-Range "${cr}"')
 		}
-		length := cr[slash + 1..].i64()
+		length := util.i64_or(cr[slash + 1..], 0)
 		if length <= 0 {
 			return error('transfer: bad length in Content-Range "${cr}"')
 		}
@@ -49,7 +50,7 @@ pub fn (f HttpFetcher) head(url string) !Meta {
 			ranges: true
 		}
 	}
-	length := (res.header.get(.content_length) or { '0' }).i64()
+	length := util.i64_or(res.header.get(.content_length) or { '0' }, 0)
 	return Meta{
 		length: length
 		ranges: false
@@ -82,8 +83,9 @@ pub fn (f HttpFetcher) fetch(url string, seg plan.Segment, path string) !i64 {
 	if res.status_code != 200 && res.status_code != 206 {
 		return error('transfer: HTTP ${res.status_code} for ${seg.range_header()}')
 	}
-	// A short segment is a corrupt download, not a success. The file has been
-	// pre-sized, so a length check is the only thing that catches it.
+	// A short segment is a corrupt download, not a success. The output file is
+	// only shrunk when stale, not padded to the planned size, so this byte
+	// count is the check that catches a truncated body.
 	if w.written != seg.len() {
 		return error('transfer: segment ${seg.index} wrote ${w.written} of ${seg.len()} bytes')
 	}

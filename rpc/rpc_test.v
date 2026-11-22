@@ -177,3 +177,27 @@ fn test_global_stat_and_option_caches_follow_their_mutations() {
 	opts_raw = m.handle_payload('{"jsonrpc":"2.0","id":6,"method":"aria2.getGlobalOption","params":[]}')
 	assert any_str(field(any_map(result_of(opts_raw)), 'dir')) == 'D:/new', opts_raw
 }
+
+fn test_a_notification_gets_no_response() {
+	mut m := new_test_manager('')
+	raw := m.handle_payload('{"jsonrpc":"2.0","method":"aria2.getVersion","params":[]}')
+	assert raw == '', 'a request without id must not be answered: ${raw}'
+}
+
+fn test_pause_and_remove_signal_the_worker_to_stop() {
+	mut m := new_test_manager('')
+	added := m.handle_payload('{"jsonrpc":"2.0","id":1,"method":"aria2.addUri","params":[["https://a/f.bin"]]}')
+	gid := any_str(result_of(added))
+	cancel := m.cancels[gid] or { panic('no cancel token') }
+	assert !cancel.is_stopped(), 'a new worker runs'
+	_ = m.handle_payload('{"jsonrpc":"2.0","id":2,"method":"aria2.pause","params":["${gid}"]}')
+	assert cancel.is_stopped(), 'pause must stop the worker'
+}
+
+fn test_the_queue_refuses_to_grow_past_the_cap() {
+	mut m := new_test_manager('')
+	m.order = []string{len: 10000}
+	raw := m.handle_payload('{"jsonrpc":"2.0","id":1,"method":"aria2.addUri","params":[["https://a/f.bin"]]}')
+	err := any_map(error_of(raw))
+	assert any_str(field(err, 'message')) == 'queue full', raw
+}

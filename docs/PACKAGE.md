@@ -43,6 +43,7 @@ component (`plan`, `link`, …), because V flattens module prefixes.
 | `session` | `Entry`, `encode`, `decode`, `save`, `load` | aria2-format queue files |
 | `transfer` | `Meta`, `Fetcher`, `Options`, `Progress`, `HttpFetcher`, `download`, `download_with_meta` | fetching ranges, with an injectable transport |
 | `rpc` | `Manager`, `new_manager`, `Handler`, `serve`, `version` | the loopback JSON-RPC surface Fluxget calls |
+| `util` | `all_digits`, `int_or`, `i64_or`, `secure_equal` | validating untrusted numbers and comparing secrets |
 
 `transfer.Fetcher` is the seam for callers that want to own the transport:
 implement `head` and `fetch`, then call `transfer.download` with your

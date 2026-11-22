@@ -39,11 +39,35 @@ pub struct Options {
 pub:
 	connections int
 	min_segment i64
+	cancel      &Cancel = unsafe { nil }
+}
+
+// Cancel is a shared stop flag. Pause and remove call stop(); the transfer
+// checks it between segments so a queued download can be abandoned.
+pub struct Cancel {
+mut:
+	mu      sync.Mutex
+	stopped bool
+}
+
+// stop records that the owner no longer wants this transfer to continue.
+pub fn (mut c Cancel) stop() {
+	c.mu.lock()
+	c.stopped = true
+	c.mu.unlock()
+}
+
+// is_stopped reports whether stop() has been called.
+pub fn (mut c Cancel) is_stopped() bool {
+	c.mu.lock()
+	v := c.stopped
+	c.mu.unlock()
+	return v
 }
 
 // Progress is a byte counter shared between the workers and the caller.
 //
-// Workers report through a channel, and only the collecting loop calls add,
+// Each worker owns one result slot, and only the collecting loop calls add,
 // so no lock is needed. Keeping progress here rather than in the RPC layer is
 // what lets a CLI download print the same number the daemon reports.
 pub struct Progress {
@@ -96,6 +120,12 @@ pub fn download_with_meta(url string, meta Meta, known i64, done i64, path strin
 	if segs.len == 0 {
 		return 0
 	}
+	cancelled := fn (c &Cancel) bool {
+		return c != unsafe { nil } && c.is_stopped()
+	}
+	if cancelled(opts.cancel) {
+		return error('transfer: cancelled')
+	}
 
 	// Create the file once before any worker starts. N workers racing to
 	// create the same path would each truncate it. Writes at an offset extend
@@ -111,6 +141,9 @@ pub fn download_with_meta(url string, meta Meta, known i64, done i64, path strin
 	// One segment needs no goroutine, channel or wait group. That is the
 	// common case for small files and for servers that ignore Range.
 	if segs.len == 1 {
+		if cancelled(opts.cancel) {
+			return error('transfer: cancelled')
+		}
 		n := fetcher.fetch(url, segs[0], path) or {
 			return error('transfer: 1 segment(s) failed: ${err.msg()}')
 		}
@@ -123,10 +156,16 @@ pub fn download_with_meta(url string, meta Meta, known i64, done i64, path strin
 	mut results := []Result{len: segs.len}
 	mut wg := sync.new_waitgroup()
 	for i, seg in segs {
+		if cancelled(opts.cancel) {
+			break
+		}
 		wg.add(1)
 		go fetch_one_at(url, path, seg, i, fetcher, mut results, wg)
 	}
 	wg.wait()
+	if cancelled(opts.cancel) {
+		return error('transfer: cancelled')
+	}
 
 	mut written := i64(0)
 	mut failures := 0

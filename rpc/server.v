@@ -1,6 +1,7 @@
 // server.v - loopback HTTP JSON-RPC, the shape Fluxget talks to today.
 module rpc
 
+import fluxdl.util
 import net.http
 
 // Handler serves POST /jsonrpc and answers with a JSON-RPC envelope.
@@ -26,13 +27,17 @@ pub fn (mut h Handler) handle(req http.Request) http.Response {
 	if h.manager.secret != '' {
 		header_token := req.header.get_custom('X-Rpc-Secret') or { '' }
 		query_token := url_token(req.url)
-		if (header_token != '' && header_token != h.manager.secret)
-			|| (query_token != '' && query_token != h.manager.secret) {
+		if (header_token != '' && !util.secure_equal(header_token, h.manager.secret))
+			|| (query_token != '' && !util.secure_equal(query_token, h.manager.secret)) {
 			res.body = '{"jsonrpc":"2.0","error":{"code":-32000,"message":"Unauthorized"}}'
 			return res
 		}
 	}
 	res.body = h.manager.handle_payload(req.data)
+	// A JSON-RPC notification has no id and receives no response at all.
+	if res.body == '' {
+		res.status_code = 204
+	}
 	return res
 }
 

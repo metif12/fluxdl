@@ -13,6 +13,7 @@ import fluxdl.plan
 import fluxdl.rpc
 import fluxdl.session
 import fluxdl.transfer
+import fluxdl.util
 
 fn usage() {
 	print('fluxdl ${rpc.version} - a download engine in pure V
@@ -67,9 +68,9 @@ fn cmd_plan(args []string) {
 		exit(1)
 	}
 	url := args[0]
-	length := args[1].i64()
-	connections := if args.len > 2 { args[2].int() } else { 4 }
-	min_segment := if args.len > 3 { args[3].i64() } else { 0 }
+	length := util.i64_or(args[1], 0)
+	connections := if args.len > 2 { util.int_or(args[2], 4) } else { 4 }
+	min_segment := if args.len > 3 { util.i64_or(args[3], 0) } else { 0 }
 
 	l := link.parse(url) or {
 		eprintln('fluxdl: ${err.msg()}')
@@ -150,13 +151,13 @@ fn cmd_download(args []string) {
 			'-x' {
 				i++
 				if i < args.len {
-					connections = args[i].int()
+					connections = util.int_or(args[i], 4)
 				}
 			}
 			'--min-segment' {
 				i++
 				if i < args.len {
-					min_segment = args[i].i64()
+					min_segment = util.i64_or(args[i], 0)
 				}
 			}
 			else {
@@ -207,7 +208,9 @@ fn cmd_serve(args []string) {
 	mut secret := os.getenv('FLUXDL_SECRET')
 	mut session_path := os.getenv('FLUXDL_SESSION')
 	if session_path == '' {
-		session_path = os.join_path(os.temp_dir(), 'fluxdl.session')
+		// A user-owned directory, not the shared temp folder: another account
+		// must not be able to plant the session file this daemon trusts.
+		session_path = os.join_path(os.home_dir(), '.fluxdl', 'session')
 	}
 	mut i := 0
 	for i < args.len {
