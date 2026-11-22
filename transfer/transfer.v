@@ -8,7 +8,7 @@
 // in a unit test, which is why those rules are here and not in the HTTP code.
 module transfer
 
-import aria2v.internal.plan
+import aria2v.plan
 import os
 import sync
 

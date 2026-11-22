@@ -1,6 +1,6 @@
 module transfer
 
-import aria2v.internal.plan
+import aria2v.plan
 import os
 
 // A fetcher that writes deterministic bytes at the segment's offset. It is the

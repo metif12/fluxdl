@@ -61,7 +61,7 @@ a parse failure returns `-32700`.
 ## The four wire quirks
 
 These were established against `aria2c 1.37.0` with `curl`, not read from docs,
-and are asserted in `internal/rpc/rpc_test.v`:
+and are asserted in `rpc/rpc_test.v`:
 
 1. The token is a **leading** argument and is not repeated in multicall's inner
    calls. Dispatch never sees it.

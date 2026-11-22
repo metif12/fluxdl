@@ -11,6 +11,7 @@ source of truth it links to.
 
 | Document | Question it answers |
 |---|---|
+| [PACKAGE.md](PACKAGE.md) | how to install and import aria2v as a vpm package |
 | [CLI](CLI.md) | what each command does, and what flags it takes |
 | [Architecture](ARCHITECTURE.md) | where the purity boundary is and why the files are arranged this way |
 | [RPC](RPC.md) | the JSON-RPC methods, their shapes, and the four wire quirks |

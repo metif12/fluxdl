@@ -6,7 +6,7 @@
 // multi-connection download needs N independent cursors into one file.
 module transfer
 
-import aria2v.internal.plan
+import aria2v.plan
 import net.http
 import os
 

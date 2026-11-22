@@ -43,7 +43,7 @@ same flat shape.
 ## Consequences
 
 - Option names in the file are aria2's (`max-connection-per-server`), not ours.
-  They are kept verbatim in `internal/session/session.v` and nowhere else: a
+  They are kept verbatim in `session/session.v` and nowhere else: a
   new name would be a second vocabulary to maintain.
 - Decoding is **lossy by design**: a line the loader cannot understand is skipped
   and counted, never fatal. See `session.v` for the rule.

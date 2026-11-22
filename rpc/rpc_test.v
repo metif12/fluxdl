@@ -1,14 +1,14 @@
 module rpc
 
-import aria2v.internal.plan
-import aria2v.internal.session
-import aria2v.internal.transfer
+import aria2v.plan
+import aria2v.session
+import aria2v.transfer
 import json2
 import os
 
 // A fetcher that never opens a socket. It lets the RPC tests assert the wire
 // shape instead of waiting for a download, which is the whole division of
-// labour between this module and internal/transfer.
+// labour between this module and transfer.
 struct TestFetcher {}
 
 pub fn (f TestFetcher) head(url string) !transfer.Meta {

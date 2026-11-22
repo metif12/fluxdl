@@ -9,7 +9,7 @@ have caught it being wrong. The two columns that matter are **Proves** and
 
 ## Milestone 0 — the manager's brain ✅ DONE
 
-`internal/plan`, `internal/link`, `internal/session` and the CLI that drives them.
+`plan`, `link`, `session` and the CLI that drives them.
 All pure, no sockets.
 
 | | |
@@ -20,7 +20,7 @@ All pure, no sockets.
 
 ## Milestone 1 — HTTP + HTTPS transfer ✅ DONE
 
-`internal/transfer` over `net.http`, with a `Downloader` that writes into a
+`transfer` over `net.http`, with a `Downloader` that writes into a
 `plan.Segment` at its offset, and N of them running concurrently per download.
 
 | | |

@@ -10,7 +10,36 @@ reversible.
 
 **[Project site and documentation](https://metif12.github.io/aria2v/)** ·
 [Quick start](docs/CLI.md) · [Architecture](docs/ARCHITECTURE.md) ·
-[RPC reference](docs/RPC.md) · [Roadmap](ROADMAP.md)
+[RPC reference](docs/RPC.md) · [vpm package](docs/PACKAGE.md) ·
+[Roadmap](ROADMAP.md)
+
+## Install as a V package
+
+```powershell
+v install metif12.aria2v                            # from vpm once registered
+v install --git https://github.com/metif12/aria2v   # from source today
+```
+
+Add it to a project's `v.mod` with `v install` from inside that project. VPM
+packages are imported under their full name (`metif12.aria2v.plan`); a git
+install of this repo uses the short prefix (`aria2v.plan`):
+
+```v
+import metif12.aria2v.plan
+import metif12.aria2v.link
+
+fn main() {
+	segs := plan.plan(1048576, 4, 0)
+	for s in segs {
+		println(s.range_header())
+	}
+	l := link.parse('https://example.com/archive.bin?token=abc') or { return }
+	println(link.safe_name(l.name)) // archive.bin
+}
+```
+
+The five public modules are `plan`, `link`, `session`, `transfer` and `rpc`.
+See [docs/PACKAGE.md](docs/PACKAGE.md) for the API surface and publishing notes.
 
 ## Why this exists
 
@@ -86,14 +115,13 @@ Full CLI reference: [docs/CLI.md](docs/CLI.md).
 ```
 v.mod
 main.v                    the CLI
-internal/
-  plan/    plan.v         how one download is split into byte ranges
-  link/    link.v         what an address means, and what to call the file
-  session/ session.v      the queue on disk, in aria2's format
-  transfer/               the engine: probe, concurrent fetch, byte accounting
-    transfer.v            pure manager; the HTTP path is injected
-    http_fetcher.v        the only file here that opens a socket
-  rpc/                    loopback JSON-RPC, exactly the subset Fluxget calls
+plan/      plan.v         how one download is split into byte ranges
+link/      link.v         what an address means, and what to call the file
+session/   session.v      the queue on disk, in aria2's format
+transfer/                 the engine: probe, concurrent fetch, byte accounting
+  transfer.v              pure manager; the HTTP path is injected
+  http_fetcher.v          the only file here that opens a socket
+rpc/                      loopback JSON-RPC, exactly the subset Fluxget calls
 docs/                     the GitHub Pages site and the decision records
 ```
 
@@ -116,7 +144,7 @@ or by Fluxget's own contract suite, not by `v test`.
 ## Network use
 
 Tests are network-free and stay that way. Every network path is behind a CLI
-command or the RPC server. The probe in `internal/transfer/http_fetcher.v`
+command or the RPC server. The probe in `transfer/http_fetcher.v`
 reads one byte to learn whether the server honours `Range` and what the total
 length is; nothing is fetched speculatively.
 

@@ -5,12 +5,12 @@ disagree, the stricter one wins: this code will run in Fluxget's process space.
 
 ## 1. Purity
 
-- `internal/plan`, `internal/link` and `internal/session` are **pure**. No sockets,
-  no `http.`, no `net.`, no `time.` outside `main.v`, `internal/transfer` and
-  `internal/rpc`.
-- `internal/transfer/transfer.v` stays pure by taking a `Fetcher` interface. The
+- `plan`, `link` and `session` are **pure**. No sockets,
+  no `http.`, no `net.`, no `time.` outside `main.v`, `transfer` and
+  `rpc`.
+- `transfer/transfer.v` stays pure by taking a `Fetcher` interface. The
   only production implementation that opens a socket is
-  `internal/transfer/http_fetcher.v`. A new network path must go behind the same
+  `transfer/http_fetcher.v`. A new network path must go behind the same
   interface or this rule is broken.
 - `v test` never touches the network and never starts a download. Anything that
   does is behind an env var and capped at 1 MiB, the same ceiling Fluxget uses.
@@ -43,7 +43,7 @@ Read once, and add to the list when you meet a new one:
 
 ## 3. The session file is the contract, not an implementation detail
 
-- It is written in `aria2c`'s format on purpose. See `internal/session/session.v`:
+- It is written in `aria2c`'s format on purpose. See `session/session.v`:
   the shape that survives the app not running is the one the other engine can also
   read, and a cut-over you cannot reverse is a cut-over nobody will let you do.
 - A corrupt line costs **one** entry, never the queue. This is asserted by

@@ -6,15 +6,15 @@
 // four wire quirks recorded in docs/compat/fluxget.md before that test runs.
 module rpc
 
-import aria2v.internal.link
-import aria2v.internal.session
-import aria2v.internal.transfer
+import aria2v.link
+import aria2v.session
+import aria2v.transfer
 import json2
 import os
 import strings
 import sync
 
-pub const version = '0.2.0'
+pub const version = '0.3.0'
 
 // Download is one row of the queue, in the fields aria2's tellStatus uses.
 pub struct Download {

@@ -26,3 +26,5 @@ jobs:
         run: v build -o aria2v .
       - name: Smoke-check CLI
         run: ./aria2v --version
+      - name: Library example
+        run: v run examples/library.v

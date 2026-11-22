@@ -22,8 +22,8 @@ the RPC half.
 The manager is: what to download, which bytes, how many connections, resume,
 progress, session, queue state. The wire is: TCP, TLS, headers, bodies.
 
-Concretely: `internal/plan` decides *which byte ranges*; `net.http` fetches each
-one. `internal/session` decides *what to remember*; `os` writes it. Nothing in this
+Concretely: `plan` decides *which byte ranges*; `net.http` fetches each
+one. `session` decides *what to remember*; `os` writes it. Nothing in this
 repo reimplements HTTP, and nothing in it opens a raw socket.
 
 ## Why
@@ -41,12 +41,12 @@ repo reimplements HTTP, and nothing in it opens a raw socket.
 
 ## Consequences
 
-- `internal/plan` and `internal/session` never import `net.http`. They are pure,
+- `plan` and `session` never import `net.http`. They are pure,
   and the dependency direction is one-way.
 - A bug in the transport is a bug in V's stdlib and is not fixable here. That is a
   real cost, and it is the point: it is a cost someone else carries.
 - `net.http`'s own streaming `Downloader` forwards chunks only for status 200,
-  not 206. `internal/transfer/http_fetcher.v` therefore uses
+  not 206. `transfer/http_fetcher.v` therefore uses
   `FetchConfig.on_progress_body`, which receives every chunk with its status
   code, and writes it at the segment's offset. Still `net.http`; just the lower
   level of its API. The probe body is capped at 64 bytes, so no file is buffered

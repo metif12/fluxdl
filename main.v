@@ -3,16 +3,16 @@
 // Two kinds of command live here. `plan`, `session` and `suggest` are pure and
 // exist to make the engine's arithmetic inspectable without a network.
 // `download` and `serve` are the real engine, and are thin calls into
-// internal/transfer and internal/rpc - a CLI that also holds logic is a CLI
+// transfer and rpc - a CLI that also holds logic is a CLI
 // that cannot be tested by vlib's test runner.
 module main
 
 import os
-import aria2v.internal.link
-import aria2v.internal.plan
-import aria2v.internal.rpc
-import aria2v.internal.session
-import aria2v.internal.transfer
+import aria2v.link
+import aria2v.plan
+import aria2v.rpc
+import aria2v.session
+import aria2v.transfer
 
 fn usage() {
 	print('aria2v ${rpc.version} - a download engine in pure V

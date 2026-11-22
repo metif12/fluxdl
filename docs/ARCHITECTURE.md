@@ -7,13 +7,13 @@ is pushed into one file.
 ## The dependency direction
 
 ```
-main.v
-  ├── internal/plan      pure arithmetic
-  ├── internal/link      pure text
-  ├── internal/session   files, but no sockets
-  ├── internal/transfer  manager (pure) ──> Fetcher interface
-  │                                          └── http_fetcher.v ──> net.http
-  └── internal/rpc       JSON-RPC shape ──> transfer.Fetcher
+main.v                 the CLI (also a library consumer)
+  ├── plan              pure arithmetic
+  ├── link              pure text
+  ├── session           files, but no sockets
+  ├── transfer          manager (pure) ──> Fetcher interface
+  │                                       └── http_fetcher.v ──> net.http
+  └── rpc               JSON-RPC shape ──> transfer.Fetcher
 ```
 
 Dependencies only point down. `plan` does not know about HTTP. `transfer` knows
