@@ -127,3 +127,24 @@ fn test_unknown_method_is_a_json_rpc_error() {
 	err := any_map(error_of(raw))
 	assert any_num_str(field(err, 'code')) == '-32601', '${raw}'
 }
+
+// The status cache is the hot path. These assertions would all fail if a
+// mutation forgot to bump the version: the poll would keep answering the
+// previously cached bytes.
+fn test_the_status_cache_invalidates_on_every_state_change() {
+	mut m := new_test_manager('')
+	added := m.handle_payload('{"jsonrpc":"2.0","id":1,"method":"aria2.addUri","params":[["https://a/f.bin"]]}')
+	gid := any_str(result_of(added))
+
+	mut active := m.handle_payload('{"jsonrpc":"2.0","id":2,"method":"aria2.tellActive","params":[]}')
+	assert any_arr(result_of(active)).len == 0, 'a waiting download is not active'
+
+	m.set_started(gid, 1024, 'f.bin', 'D:/x', 'f.bin')
+	active = m.handle_payload('{"jsonrpc":"2.0","id":3,"method":"aria2.tellActive","params":[]}')
+	assert any_arr(result_of(active)).len == 1, 'set_started must invalidate the cache'
+
+	paused := m.handle_payload('{"jsonrpc":"2.0","id":4,"method":"aria2.pause","params":["${gid}"]}')
+	assert any_str(result_of(paused)) == gid, paused
+	active = m.handle_payload('{"jsonrpc":"2.0","id":5,"method":"aria2.tellActive","params":[]}')
+	assert any_arr(result_of(active)).len == 0, 'pause must invalidate the cache'
+}

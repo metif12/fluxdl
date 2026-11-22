@@ -72,6 +72,15 @@ Fluxget actually calls. Every numeric field on the wire is a string, and the
 leading `token:` argument is stripped before dispatch — including for
 `system.multicall`, whose inner calls do not repeat it.
 
+Two details keep that state machine cheap under a poll-heavy client:
+
+- The probe happens once. `aria2.addUri` gets the length, and the worker uses
+  `transfer.download_with_meta` so the transfer does not probe a second time.
+- A tellStatus row is encoded once per `Download.version` and cached. A state
+  change bumps the version, so the next poll re-encodes; unchanged polls are
+  string assembly only. The poll benchmark (5,000 `tellActive` calls over 100
+  rows) went from 14.6 s to 0.74 s.
+
 See [RPC.md](RPC.md) and [compat/fluxget.md](compat/fluxget.md).
 
 ## What is deliberately absent

@@ -73,6 +73,14 @@ pub fn download(url string, known i64, done i64, path string, opts Options, fetc
 	meta := fetcher.head(url) or {
 		return error('transfer: cannot inspect ${url}: ${err.msg()}')
 	}
+	return download_with_meta(url, meta, known, done, path, opts, fetcher, mut progress)
+}
+
+// download_with_meta is the same transfer when the caller already probed the
+// URL. A daemon that probed at addUri time must not probe a second time just
+// to start the download — that is one extra round trip and one extra byte
+// range on every queue item.
+pub fn download_with_meta(url string, meta Meta, known i64, done i64, path string, opts Options, fetcher &Fetcher, mut progress Progress) !i64 {
 	total := if meta.length > 0 { meta.length } else { known }
 	if total <= 0 {
 		return error('transfer: unknown length for ${url}')

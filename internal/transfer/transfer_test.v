@@ -104,3 +104,36 @@ fn test_an_unknown_length_is_an_error_not_a_zero_byte_file() {
 	}
 	assert false, 'unknown length must not be reported as an empty download'
 }
+
+// CountingFetcher records probes through a shared pointer, so its method can
+// keep the immutable receiver the Fetcher interface requires.
+struct CountingFetcher {
+	length i64
+	heads  &int
+}
+
+pub fn (f CountingFetcher) head(url string) !Meta {
+	unsafe {
+		*f.heads = *f.heads + 1
+	}
+	return Meta{ length: f.length, ranges: true }
+}
+
+pub fn (f CountingFetcher) fetch(url string, seg plan.Segment, path string) !i64 {
+	return seg.len()
+}
+
+fn test_download_with_meta_does_not_probe_a_second_time() {
+	p := scratch('oneprobe.bin')
+	mut heads := 0
+	f := &CountingFetcher{ length: 1024, heads: &heads }
+	meta := f.head('https://example.test/once.bin') or { panic(err.msg()) }
+	assert heads == 1, 'one probe before starting'
+	mut progress := &Progress{}
+	n := download_with_meta('https://example.test/once.bin', meta, meta.length, 0, p, Options{ connections: 2 }, f, mut progress) or {
+		assert false, err.msg()
+		return
+	}
+	assert n == 1024, 'got ${n}'
+	assert heads == 1, 'the transfer probed a second time: ${heads}'
+}

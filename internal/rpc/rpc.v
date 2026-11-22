@@ -11,6 +11,7 @@ import aria2v.internal.session
 import aria2v.internal.transfer
 import json2
 import os
+import strings
 import sync
 
 pub const version = '0.2.0'
@@ -30,6 +31,16 @@ pub mut:
 	options       map[string]string
 	error_code    string
 	error_message string
+	// version changes on every mutation. A status object is encoded once per
+	// version and reused by every poll in between, which is the hot path:
+	// Fluxget asks for the whole queue on every tick.
+	version int
+}
+
+// StatusCache is one already-encoded tellStatus row.
+struct StatusCache {
+	version int
+	json    string
 }
 
 // Manager owns the queue and the settings document. It is shared by the HTTP
@@ -43,6 +54,7 @@ pub mut:
 	session_path string
 	secret       string
 	fetcher      &transfer.Fetcher
+	status_cache map[string]StatusCache
 	auto_start   bool
 	shutdown     bool
 	counter      int
@@ -66,6 +78,7 @@ pub fn new_manager(secret string, session_path string) &Manager {
 		session_path: session_path
 		secret:       secret
 		fetcher:      &transfer.HttpFetcher{}
+		status_cache: map[string]StatusCache{}
 		auto_start:   true
 	}
 }
@@ -171,13 +184,20 @@ fn any_map_of_strings(m map[string]string) json2.Any {
 	return json2.Any(out)
 }
 
-fn ok(id json2.Any, result json2.Any) string {
-	res := map[string]json2.Any{
-		'jsonrpc': '2.0'
-		'id':      id
-		'result':  result
+// ok wraps an already-encoded result. The hot methods build their result
+// directly instead of allocating an Any tree for json2 to walk again.
+fn ok(id json2.Any, result_json string) string {
+	mut sb := strings.new_builder(result_json.len + 64)
+	sb.write_string('{"jsonrpc":"2.0","id":')
+	sb.write_string(json2.encode(id))
+	sb.write_string(',"result":')
+	sb.write_string(result_json)
+	sb.write_string('}')
+	res := sb.str()
+	unsafe {
+		sb.free()
 	}
-	return json2.encode(res)
+	return res
 }
 
 fn fail(id json2.Any, code int, msg string) string {
@@ -227,29 +247,30 @@ pub fn (mut m Manager) handle_payload(raw string) string {
 	}
 
 	if method == 'system.multicall' {
-		mut out := []json2.Any{}
+		mut out := []string{}
 		for call in any_arr(field_from(params, 0)) {
 			c := any_map(call)
 			name := any_str(field(c, 'methodName'))
-			result, code, msg := m.dispatch(name, any_arr(field(c, 'params')))
+			result_json, code, msg := m.dispatch(name, any_arr(field(c, 'params')))
 			if code != 0 {
-				out << json2.Any(map[string]json2.Any{
-					'code':    code
-					'message': msg
-				})
+				mut err_obj := map[string]json2.Any{
+					'code':    json2.Any(code)
+					'message': json2.Any(msg)
+				}
+				out << json2.encode(err_obj)
 			} else {
 				// A successful multicall entry is a one-element array.
-				out << json2.Any([result])
+				out << '[' + result_json + ']'
 			}
 		}
-		return ok(id, json2.Any(out))
+		return ok(id, '[' + out.join(',') + ']')
 	}
 
-	result, code, msg := m.dispatch(method, params)
+	result_json, code, msg := m.dispatch(method, params)
 	if code != 0 {
 		return fail(id, code, msg)
 	}
-	return ok(id, result)
+	return ok(id, result_json)
 }
 
 fn field_from(arr []json2.Any, i int) json2.Any {
@@ -298,6 +319,24 @@ fn status_obj(d Download) json2.Any {
 	})
 }
 
+// status_json encodes one row once per version. Callers hold m.mu, so the
+// cache is safe to read and write here.
+fn (mut m Manager) status_json(gid string) string {
+	d := m.downloads[gid]
+	if gid in m.status_cache {
+		cached := m.status_cache[gid]
+		if cached.version == d.version {
+			return cached.json
+		}
+	}
+	encoded := json2.encode(status_obj(d))
+	m.status_cache[gid] = StatusCache{
+		version: d.version
+		json:    encoded
+	}
+	return encoded
+}
+
 fn method_names() []string {
 	return [
 		'aria2.addUri',
@@ -328,19 +367,22 @@ fn method_names() []string {
 	]
 }
 
-// dispatch maps a method name to a result, an aria2 error code and a message.
-fn (mut m Manager) dispatch(method string, p []json2.Any) (json2.Any, int, string) {
+// dispatch maps a method name to an already-encoded JSON result, an aria2
+// error code and a message. Encoding once here, rather than building an Any
+// tree for every poll, is the difference between a cheap tick and a costly
+// one when the queue has hundreds of rows.
+fn (mut m Manager) dispatch(method string, p []json2.Any) (string, int, string) {
 	match method {
 		'aria2.addUri' {
 			uris := any_strings(field_from(p, 0))
 			if uris.len == 0 || uris[0] == '' {
-				return json2.Any(''), -32602, 'addUri needs a URI'
+				return '""', -32602, 'addUri needs a URI'
 			}
 			mut opts := map[string]string{}
 			if p.len > 1 {
 				opts = string_map(p[1])
 			}
-			return json2.Any(m.add(uris, opts)), 0, ''
+			return json2.encode(m.add(uris, opts)), 0, ''
 		}
 		'aria2.tellStatus' {
 			m.mu.lock()
@@ -349,9 +391,9 @@ fn (mut m Manager) dispatch(method string, p []json2.Any) (json2.Any, int, strin
 			}
 			gid := any_str(field_from(p, 0))
 			if gid !in m.downloads {
-				return null_id(), -32000, 'GID not found'
+				return 'null', -32000, 'GID not found'
 			}
-			return status_obj(m.downloads[gid]), 0, ''
+			return m.status_json(gid), 0, ''
 		}
 		'aria2.tellActive', 'aria2.tellWaiting', 'aria2.tellStopped' {
 			m.mu.lock()
@@ -365,7 +407,7 @@ fn (mut m Manager) dispatch(method string, p []json2.Any) (json2.Any, int, strin
 			} else {
 				''
 			}
-			mut rows := []json2.Any{}
+			mut rows := []string{}
 			for gid in m.order {
 				d := m.downloads[gid]
 				if wanted != '' && d.status != wanted {
@@ -374,9 +416,9 @@ fn (mut m Manager) dispatch(method string, p []json2.Any) (json2.Any, int, strin
 				if wanted == '' && d.status in ['active', 'paused', 'waiting'] {
 					continue
 				}
-				rows << status_obj(d)
+				rows << m.status_json(gid)
 			}
-			return json2.Any(rows), 0, ''
+			return '[' + rows.join(',') + ']', 0, ''
 		}
 		'aria2.pause', 'aria2.unpause' {
 			gid := any_str(field_from(p, 0))
@@ -385,7 +427,7 @@ fn (mut m Manager) dispatch(method string, p []json2.Any) (json2.Any, int, strin
 				m.mu.unlock()
 			}
 			if gid !in m.downloads {
-				return null_id(), -32000, 'GID not found'
+				return 'null', -32000, 'GID not found'
 			}
 			mut d := m.downloads[gid]
 			d.status = if method.ends_with('pause') && !method.ends_with('unpause') {
@@ -393,8 +435,9 @@ fn (mut m Manager) dispatch(method string, p []json2.Any) (json2.Any, int, strin
 			} else {
 				'active'
 			}
+			d.version++
 			m.downloads[gid] = d
-			return json2.Any(gid), 0, ''
+			return json2.encode(gid), 0, ''
 		}
 		'aria2.pauseAll', 'aria2.unpauseAll' {
 			m.mu.lock()
@@ -406,10 +449,11 @@ fn (mut m Manager) dispatch(method string, p []json2.Any) (json2.Any, int, strin
 				mut d := m.downloads[gid]
 				if d.status in ['active', 'paused'] {
 					d.status = new_status
+					d.version++
 					m.downloads[gid] = d
 				}
 			}
-			return json2.Any('OK'), 0, ''
+			return '"OK"', 0, ''
 		}
 		'aria2.remove', 'aria2.removeDownloadResult' {
 			gid := any_str(field_from(p, 0))
@@ -418,7 +462,7 @@ fn (mut m Manager) dispatch(method string, p []json2.Any) (json2.Any, int, strin
 				m.mu.unlock()
 			}
 			if gid !in m.downloads {
-				return null_id(), -32000, 'GID not found'
+				return 'null', -32000, 'GID not found'
 			}
 			mut d := m.downloads[gid]
 			d.status = 'removed'
@@ -426,8 +470,9 @@ fn (mut m Manager) dispatch(method string, p []json2.Any) (json2.Any, int, strin
 			if method == 'aria2.removeDownloadResult' {
 				m.order = m.order.filter(|it| it != gid)
 				m.downloads.delete(gid)
+				m.status_cache.delete(gid)
 			}
-			return json2.Any(gid), 0, ''
+			return json2.encode(gid), 0, ''
 		}
 		'aria2.getFiles', 'aria2.getUris', 'aria2.getServers', 'aria2.getPeers' {
 			gid := any_str(field_from(p, 0))
@@ -436,7 +481,7 @@ fn (mut m Manager) dispatch(method string, p []json2.Any) (json2.Any, int, strin
 				m.mu.unlock()
 			}
 			if gid !in m.downloads {
-				return null_id(), -32000, 'GID not found'
+				return 'null', -32000, 'GID not found'
 			}
 			d := m.downloads[gid]
 			if method == 'aria2.getUris' {
@@ -447,7 +492,7 @@ fn (mut m Manager) dispatch(method string, p []json2.Any) (json2.Any, int, strin
 						'status': 'used'
 					})
 				}
-				return json2.Any(rows), 0, ''
+				return json2.encode(rows), 0, ''
 			}
 			if method == 'aria2.getFiles' {
 				mut rows := []json2.Any{}
@@ -459,11 +504,11 @@ fn (mut m Manager) dispatch(method string, p []json2.Any) (json2.Any, int, strin
 					'selected':        'true'
 					'uris':            json2.Any([]json2.Any{})
 				})
-				return json2.Any(rows), 0, ''
+				return json2.encode(rows), 0, ''
 			}
 			// BitTorrent and peers are not in this engine. An honest empty
 			// list is better than a row that pretends to be a peer.
-			return json2.Any([]json2.Any{}), 0, ''
+			return '[]', 0, ''
 		}
 		'aria2.getOption' {
 			gid := any_str(field_from(p, 0))
@@ -472,9 +517,9 @@ fn (mut m Manager) dispatch(method string, p []json2.Any) (json2.Any, int, strin
 				m.mu.unlock()
 			}
 			if gid !in m.downloads {
-				return null_id(), -32000, 'GID not found'
+				return 'null', -32000, 'GID not found'
 			}
-			return any_map_of_strings(m.downloads[gid].options), 0, ''
+			return json2.encode(any_map_of_strings(m.downloads[gid].options)), 0, ''
 		}
 		'aria2.changeOption' {
 			gid := any_str(field_from(p, 0))
@@ -483,21 +528,22 @@ fn (mut m Manager) dispatch(method string, p []json2.Any) (json2.Any, int, strin
 				m.mu.unlock()
 			}
 			if gid !in m.downloads {
-				return null_id(), -32000, 'GID not found'
+				return 'null', -32000, 'GID not found'
 			}
 			mut d := m.downloads[gid]
 			for k, v in string_map(field_from(p, 1)) {
 				d.options[k] = v
 			}
+			d.version++
 			m.downloads[gid] = d
-			return json2.Any(gid), 0, ''
+			return json2.encode(gid), 0, ''
 		}
 		'aria2.getGlobalOption' {
 			m.mu.lock()
 			defer {
 				m.mu.unlock()
 			}
-			return any_map_of_strings(m.options), 0, ''
+			return json2.encode(any_map_of_strings(m.options)), 0, ''
 		}
 		'aria2.changeGlobalOption' {
 			m.mu.lock()
@@ -507,7 +553,7 @@ fn (mut m Manager) dispatch(method string, p []json2.Any) (json2.Any, int, strin
 			for k, v in string_map(field_from(p, 0)) {
 				m.options[k] = v
 			}
-			return json2.Any('OK'), 0, ''
+			return '"OK"', 0, ''
 		}
 		'aria2.getGlobalStat' {
 			m.mu.lock()
@@ -530,20 +576,22 @@ fn (mut m Manager) dispatch(method string, p []json2.Any) (json2.Any, int, strin
 					}
 				}
 			}
-			return json2.Any(map[string]json2.Any{
+			mut stat := map[string]json2.Any{
 				'downloadSpeed':   '0'
 				'uploadSpeed':     '0'
 				'numActive':       active.str()
 				'numWaiting':      waiting.str()
 				'numStopped':      stopped.str()
 				'numStoppedTotal': stopped.str()
-			}), 0, ''
+			}
+			return json2.encode(stat), 0, ''
 		}
 		'aria2.getVersion' {
-			return json2.Any(map[string]json2.Any{
+			mut ver := map[string]json2.Any{
 				'version':         '1.37.0-${version}'
 				'enabledFeatures': json2.Any([]json2.Any{})
-			}), 0, ''
+			}
+			return json2.encode(ver), 0, ''
 		}
 		'aria2.saveSession' {
 			m.mu.lock()
@@ -561,25 +609,25 @@ fn (mut m Manager) dispatch(method string, p []json2.Any) (json2.Any, int, strin
 			}
 			m.mu.unlock()
 			session.save(m.session_path, entries) or {
-				return null_id(), -32000, err.msg()
+				return 'null', -32000, err.msg()
 			}
-			return json2.Any('OK'), 0, ''
+			return '"OK"', 0, ''
 		}
 		'aria2.shutdown' {
 			m.mu.lock()
 			m.shutdown = true
 			m.mu.unlock()
-			return json2.Any('OK'), 0, ''
+			return '"OK"', 0, ''
 		}
 		'system.listMethods' {
 			mut names := []json2.Any{}
 			for n in method_names() {
 				names << json2.Any(n)
 			}
-			return json2.Any(names), 0, ''
+			return json2.encode(names), 0, ''
 		}
 		else {
-			return null_id(), -32601, 'Method not found'
+			return 'null', -32601, 'Method not found'
 		}
 	}
 }
@@ -601,6 +649,7 @@ fn (mut m Manager) add(uris []string, opts map[string]string) string {
 		options:       opts
 		error_code:    ''
 		error_message: ''
+		version:       1
 	}
 	m.downloads[gid] = d
 	m.order << gid
@@ -644,7 +693,7 @@ fn (mut m Manager) run(gid string) {
 		min_seg = d.options['min-split-size'].i64()
 	}
 	mut progress := &transfer.Progress{}
-	transfer.download(d.uri, meta.length, 0, path, transfer.Options{
+	transfer.download_with_meta(d.uri, meta, meta.length, 0, path, transfer.Options{
 		connections: conn
 		min_segment: min_seg
 	}, m.fetcher, mut progress) or {
@@ -655,6 +704,7 @@ fn (mut m Manager) run(gid string) {
 	mut cur := m.downloads[gid]
 	cur.status = 'complete'
 	cur.completed = cur.total
+	cur.version++
 	m.downloads[gid] = cur
 	m.mu.unlock()
 }
@@ -673,6 +723,7 @@ fn (mut m Manager) set_started(gid string, total i64, path string, dir string, o
 	d.path = path
 	d.dir = dir
 	d.out = out
+	d.version++
 	m.downloads[gid] = d
 }
 
@@ -688,5 +739,6 @@ fn (mut m Manager) set_error(gid string, code int, msg string) {
 	d.status = 'error'
 	d.error_code = code.str()
 	d.error_message = msg
+	d.version++
 	m.downloads[gid] = d
 }

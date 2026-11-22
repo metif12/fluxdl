@@ -21,7 +21,17 @@ pub struct HttpFetcher {}
 pub fn (f HttpFetcher) head(url string) !Meta {
 	mut h := http.Header{}
 	h.set(.range, 'bytes=0-0')
-	res := http.fetch(method: .get, url: url, header: h, validate: true, stop_copying_limit: 64)!
+	// stop_receiving_limit matters when the server ignores Range: without it,
+	// a one-byte probe would still pull the entire body over the wire before
+	// discarding all but 64 bytes.
+	res := http.fetch(
+		method:               .get
+		url:                  url
+		header:               h
+		validate:             true
+		stop_copying_limit:   64
+		stop_receiving_limit: 64
+	)!
 	if res.status_code == 206 {
 		cr := res.header.get(.content_range) or {
 			return error('transfer: a 206 without Content-Range from ${url}')

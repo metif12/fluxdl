@@ -192,7 +192,7 @@ fn cmd_download(args []string) {
 		return
 	}
 	mut progress := &transfer.Progress{}
-	n := transfer.download(url, meta.length, done, path, transfer.Options{
+	n := transfer.download_with_meta(url, meta, meta.length, done, path, transfer.Options{
 		connections: connections
 		min_segment: min_segment
 	}, fetcher, mut progress) or {
