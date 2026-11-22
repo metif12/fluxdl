@@ -13,7 +13,9 @@ That is not a stylistic choice — it is what `aria2c 1.37.0` was measured to se
 and what Fluxget parses.
 
 Start the server with `fluxdl serve --secret <token>`. With no secret configured,
-the token argument is optional.
+the token argument is optional. `GET /health` returns 200 once the session has
+been restored, and 503 while the daemon is starting. A stall supervisor restarts
+downloads that stay active without progress beyond `stall-timeout` seconds.
 
 The live queue is capped at 10,000 downloads; an `addUri` past that limit returns
 a JSON-RPC error. `pause` and `remove` signal the worker's cancellation token, so

@@ -76,6 +76,10 @@ it is scoped to those:
 | **FTP** | An `ftp://` URL uses a `net.ftp`-backed fetcher. Whole-file only, because V's FTP client has no range REST. |
 | **BitTorrent core** | Bencode, `.torrent` metadata, HTTP trackers, the peer wire protocol, rarest-first piece selection and SHA1 verification of every piece. |
 | **Metalink and checksums** | Metalink 4 files and URLs, plus `md5`/`sha1`/`sha256` verification of a completed download. |
+| **SFTP** | `sftp://` URLs use an argv-based `sftp` client through a batch file; no shell quoting. |
+| **BitTorrent discovery and seeding** | DHT fallback, PEX and magnet metadata exchange; opt-in seeding over inbound TCP. |
+| **Cookies and robots** | A cookie jar on HTTP responses and `robots.txt` checks before a request. |
+| **Readiness and supervision** | `GET /health` plus a stall supervisor that restarts stuck downloads. |
 
 What it reads is what `aria2c 1.37.0` was measured to write on this machine: a
 multi-mirror `addUri` comes back from `aria2.getUris` as **five rows for two
@@ -87,14 +91,11 @@ source instead; that difference is deliberate and is called out in
 
 Honest, because a list like this is the only thing that makes the list useful.
 
-- **DHT, PEX and magnet metadata exchange.** Tracker-based `.torrent` downloads
-  work; a bare magnet cannot yet discover peers or fetch metadata.
-- **BitTorrent seeding and encrypted streams.**
-- **SFTP**, cookie/robots handling.
+- **Encrypted BitTorrent streams.** uTP and protocol encryption are not implemented.
 - **The Fluxget cut-over test.** `platform/contract_test.v` lives in Fluxget and
   has not been run against this server.
-- **Process-level supervision.** Fluxget still owns restart, backoff and
-  readiness in `aria2ctl/`; this engine retries transfers, not processes.
+- **External process management.** The daemon has a `/health` readiness check and
+  a stall supervisor; Fluxget still owns OS-level restart of the daemon itself.
 
 ## Install and use
 
@@ -109,8 +110,11 @@ v build -o fluxdl.exe .          # V 0.5.2
 # Fetch it for real:
 ./fluxdl.exe download https://example.com/big.bin -x 8 -d D:/Downloads
 
-# Fetch a torrent over its HTTP tracker and peers:
+# Fetch a torrent (tracker, DHT and magnet metadata all work):
 ./fluxdl.exe torrent ubuntu.iso.torrent -d D:/Downloads
+
+# Seed a completed torrent to inbound peers:
+./fluxdl.exe seed ubuntu.iso.torrent -d D:/Downloads -p 6881
 
 # Inspect a Metalink document:
 ./fluxdl.exe metalink release.metalink
@@ -148,7 +152,7 @@ bugs are found without a network.
 ## Testing
 
 ```powershell
-v test .                  # 87 tests across eleven module test files
+v test .                  # 92 tests across twelve module test files
 v fmt -w .                # v fmt is law
 ```
 

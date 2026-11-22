@@ -69,6 +69,8 @@ pub mut:
 	status_cache map[string]StatusCache
 	cancels      map[string]&transfer.Cancel
 	notices      []string
+	started_at   map[string]i64
+	ready        bool
 	// Global results are cached the same way as rows: a version bump on any
 	// queue or settings mutation is the only thing that invalidates them.
 	queue_version   int
@@ -95,6 +97,8 @@ pub fn new_manager(secret string, session_path string) &Manager {
 	opts['continue'] = 'true'
 	opts['max-retries'] = '0'
 	opts['retry-delay'] = '1000'
+	opts['supervisor-interval'] = '30'
+	opts['stall-timeout'] = '300'
 	return &Manager{
 		downloads:    map[string]Download{}
 		order:        []
@@ -104,6 +108,7 @@ pub fn new_manager(secret string, session_path string) &Manager {
 		fetcher:      transfer.new_http_fetcher()
 		status_cache: map[string]StatusCache{}
 		cancels:      map[string]&transfer.Cancel{}
+		started_at:   map[string]i64{}
 		auto_start:   true
 	}
 }
@@ -821,6 +826,76 @@ fn (mut m Manager) dispatch(method string, p []json2.Any) (string, int, string) 
 	}
 }
 
+// supervise restarts downloads that have been active without progress longer
+// than the configured stall timeout. Fluxget still owns process supervision.
+pub fn (mut m Manager) supervise() {
+	interval := util.int_or(m.options['supervisor-interval'], 30)
+	timeout := util.int_or(m.options['stall-timeout'], 300)
+	if interval <= 0 || timeout <= 0 {
+		return
+	}
+	for {
+		time.sleep(time.Duration(interval) * time.second)
+		m.mu.lock()
+		if m.shutdown {
+			m.mu.unlock()
+			return
+		}
+		now := i64(time.sys_mono_now())
+		mut stalled := []string{}
+		for gid in m.order {
+			d := m.downloads[gid]
+			if d.status != 'active' || d.completed > 0 {
+				continue
+			}
+			start := m.started_at[gid] or { now }
+			if now - start > i64(timeout) * i64(time.second) {
+				stalled << gid
+			}
+		}
+		m.mu.unlock()
+		for gid in stalled {
+			m.restart_download(gid)
+		}
+	}
+}
+
+fn (mut m Manager) restart_download(gid string) {
+	m.mu.lock()
+	if gid !in m.downloads {
+		m.mu.unlock()
+		return
+	}
+	(cancels_or_new(m, gid)).stop()
+	mut d := m.downloads[gid]
+	if d.status != 'active' {
+		m.mu.unlock()
+		return
+	}
+	d.status = 'waiting'
+	d.error_code = ''
+	d.error_message = ''
+	d.version++
+	m.started_at[gid] = i64(time.sys_mono_now())
+	m.cancels[gid] = &transfer.Cancel{}
+	m.queue_version++
+	m.mu.unlock()
+	m.notice('supervisor restarted ${gid}')
+	go m.run(gid)
+}
+
+fn cancels_or_new(m &Manager, gid string) &transfer.Cancel {
+	return m.cancels[gid] or { &transfer.Cancel{} }
+}
+
+pub fn (mut m Manager) is_ready() bool {
+	m.mu.lock()
+	defer {
+		m.mu.unlock()
+	}
+	return m.ready
+}
+
 // fetcher_for picks the transport for a URI. The injectable manager fetcher is
 // kept for tests and for HTTP; FTP gets its own whole-file implementation.
 fn (m &Manager) fetcher_for(url string) &transfer.Fetcher {
@@ -900,6 +975,7 @@ fn (mut m Manager) add_torrent(meta &torrent.Torrent, opts map[string]string) !s
 	m.downloads[gid] = d
 	m.order << gid
 	m.cancels[gid] = &transfer.Cancel{}
+	m.started_at[gid] = i64(time.sys_mono_now())
 	m.queue_version++
 	m.mu.unlock()
 	go m.run_torrent(gid, meta, dir)
@@ -958,6 +1034,7 @@ fn (mut m Manager) add(uris []string, opts map[string]string) !string {
 	m.downloads[gid] = d
 	m.order << gid
 	m.cancels[gid] = &transfer.Cancel{}
+	m.started_at[gid] = i64(time.sys_mono_now())
 	m.queue_version++
 	m.mu.unlock()
 	if m.auto_start {
@@ -1138,6 +1215,7 @@ fn (mut m Manager) set_started(gid string, total i64, path string, dir string, o
 	d.dir = dir
 	d.out = out
 	d.version++
+	m.started_at[gid] = i64(time.sys_mono_now())
 	m.queue_version++
 	m.downloads[gid] = d
 }

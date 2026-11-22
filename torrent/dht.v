@@ -30,10 +30,6 @@ fn dht_query(addr string, payload string) !BValue {
 	return decode(buf[..n]) or { return error('dht: bad reply from ${addr}: ${err.msg()}') }
 }
 
-fn dht_int(obj map[string]BValue, key string) int {
-	return int(int_field(obj, key))
-}
-
 pub struct Dht {
 mut:
 	id  []u8
@@ -42,9 +38,9 @@ mut:
 
 pub fn new_dht() &Dht {
 	mut id := []u8{len: 20}
-	seed := i64(time.sys_mono_now())
+	seed_value := i64(time.sys_mono_now())
 	for i := 0; i < 20; i++ {
-		value := (seed + i64(i) * 7919) % 256
+		value := (seed_value + i64(i) * 7919) % 256
 		id[i] = u8(value)
 	}
 	return &Dht{ id: id, tid: 1 }

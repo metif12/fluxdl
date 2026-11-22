@@ -53,7 +53,7 @@ pub fn handshake(peer Peer, info_hash []u8, peer_id string) !&Conn {
 	mut reply := []u8{len: 68}
 	mut got := 0
 	for got < 68 {
-		mut slice := reply[got..]
+		mut slice := unsafe { reply[got..] }
 		n := socket.read(mut slice)!
 		if n <= 0 {
 			return error('torrent: peer closed during handshake')
@@ -72,7 +72,7 @@ pub fn handshake(peer Peer, info_hash []u8, peer_id string) !&Conn {
 fn (mut c Conn) read_exact(mut buf []u8) ! {
 	mut got := 0
 	for got < buf.len {
-		mut slice := buf[got..]
+		mut slice := unsafe { buf[got..] }
 		n := c.conn.read(mut slice)!
 		if n <= 0 {
 			return error('torrent: peer closed mid-message')

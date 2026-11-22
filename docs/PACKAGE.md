@@ -47,6 +47,7 @@ component (`plan`, `link`, …), because V flattens module prefixes.
 | `checksum` | `hash_bytes`, `hash_file`, `verify_file` | md5/sha1/sha256 verification |
 | `metalink` | `MetalinkFile`, `parse` | Metalink 4 files, URLs and hashes |
 | `ftp` | `Fetcher`, `new_fetcher`, `parse_target` | whole-file FTP downloads |
+| `sftp` | `Fetcher`, `new_fetcher`, `parse_target` | whole-file SFTP downloads via the system client |
 | `torrent` | `Torrent`, `parse`, `parse_magnet`, `download`, `announce`, `handshake` | bencode, trackers, peer wire, SHA1 pieces |
 
 `transfer.Fetcher` is the seam for callers that want to own the transport:

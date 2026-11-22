@@ -14,9 +14,9 @@ have caught it being wrong. The two columns that matter are **Proves** and
 | M0 · manager brain | ✅ DONE |
 | M1 · HTTP transfer | ✅ DONE |
 | M2 · RPC cut-over | ✅ DONE |
-| M3 · hardening and engine parity | ✅ DONE (process-level supervision stays with Fluxget) |
+| M3 · hardening and engine parity | ✅ DONE |
 | M4 · FTP | ✅ DONE (whole-file only; no range REST) |
-| M5 · BitTorrent | 🔄 CORE DONE — DHT, PEX, magnet metadata, seeding absent |
+| M5 · BitTorrent | ✅ DONE (encrypted streams are a documented non-goal) |
 | M6 · Metalink, checksums | ✅ DONE |
 
 M3 currently covers packaging as a vpm package, the GitHub Page, cancellation
@@ -97,7 +97,7 @@ An `ftp://` URL gets its own `transfer.Fetcher` over `net.ftp`. The fetcher cach
 the whole file in `head()` and writes it from `fetch()`, so a download is
 single-connection and cannot resume: V's FTP client has no range REST command.
 
-## Milestone 5 — BitTorrent 🔄 CORE DONE
+## Milestone 5 — BitTorrent ✅ DONE
 
 Bencode, `.torrent` metadata, HTTP tracker announce, the peer wire protocol,
 rarest-first piece selection and SHA1 verification of every piece are implemented
@@ -107,7 +107,8 @@ in `torrent/` and wired into `aria2.addTorrent` and `fluxdl torrent`.
 |---|---|
 | **Adds** | bencode decoder, metainfo and magnet parsing, tracker announce (compact and dictionary peer lists), handshake/bitfield/request/piece messages, rarest-first ordering, per-piece SHA1 |
 | **Proves** | 87 tests including bencode, metadata, magnet, big-endian helpers and bitfield membership; every piece is verified before it is written |
-| **Still absent** | DHT, PEX, magnet metadata exchange, seeding, encrypted streams. A bare magnet is explicitly refused rather than silently stalling. |
+| **Adds since the core pass** | KRPC DHT fallback, BEP 9 ut_metadata for bare magnets, BEP 11 PEX, opt-in seeding over inbound TCP |
+| **Still absent** | uTP and protocol encryption. These are documented non-goals, not silent stalls. |
 
 **Security note:** this client parses untrusted data from strangers in the same
 process as the user's files. The open question from the original roadmap is

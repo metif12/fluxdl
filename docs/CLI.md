@@ -91,6 +91,11 @@ Downloads a `.torrent` using its HTTP tracker and the peer wire protocol. Pieces
 are chosen rarest-first and verified against the SHA1 hashes in the metainfo.
 DHT, PEX and magnet metadata exchange are not implemented.
 
+### `fluxdl seed <path> [-d dir] [-p port]`
+
+Serves a completed torrent to inbound peers over TCP. Seeding is opt-in; a
+download does not automatically become an upload.
+
 ### `fluxdl metalink <path>`
 
 Prints the files, URLs and hashes declared by a Metalink 4 document. To queue

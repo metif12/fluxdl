@@ -19,6 +19,15 @@ pub fn (mut h Handler) handle(req http.Request) http.Response {
 	mut res := http.Response{}
 	res.status_code = 200
 	res.header.set_custom('Content-Type', 'application/json') or {}
+	if req.method == .get {
+		if req.url.starts_with('/health') && h.manager.is_ready() {
+			res.body = '{"status":"ok"}'
+			return res
+		}
+		res.status_code = 503
+		res.body = '{"status":"starting"}'
+		return res
+	}
 	if req.method != .post {
 		res.status_code = 405
 		res.body = '{"jsonrpc":"2.0","error":{"code":-32600,"message":"POST only"}}'
@@ -56,6 +65,8 @@ fn url_token(url string) string {
 pub fn serve(addr string, secret string, session_path string) {
 	mut manager := new_manager(secret, session_path)
 	manager.restore_session()
+	manager.ready = true
+	go manager.supervise()
 	mut server := http.Server{
 		addr:                 addr
 		handler:              &Handler{ manager: manager }

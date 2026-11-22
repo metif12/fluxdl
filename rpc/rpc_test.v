@@ -178,6 +178,13 @@ fn test_global_stat_and_option_caches_follow_their_mutations() {
 	assert any_str(field(any_map(result_of(opts_raw)), 'dir')) == 'D:/new', opts_raw
 }
 
+fn test_readiness_reflects_manager_state() {
+	mut m := new_test_manager('')
+	assert !m.is_ready(), 'a new manager is not ready'
+	m.ready = true
+	assert m.is_ready(), 'readiness flips after restore'
+}
+
 fn test_a_notification_gets_no_response() {
 	mut m := new_test_manager('')
 	raw := m.handle_payload('{"jsonrpc":"2.0","method":"aria2.getVersion","params":[]}')

@@ -9,7 +9,7 @@ import os
 fn read_exact(socket &net.TcpConn, mut buf []u8) ! {
 	mut got := 0
 	for got < buf.len {
-		mut slice := buf[got..]
+		mut slice := unsafe { buf[got..] }
 		n := socket.read(mut slice) or { return error('seed: peer closed') }
 		if n <= 0 {
 			return error('seed: peer closed')
