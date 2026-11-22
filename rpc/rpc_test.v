@@ -5,6 +5,7 @@ import fluxdl.session
 import fluxdl.transfer
 import json2
 import os
+import strings
 
 // A fetcher that never opens a socket. It lets the RPC tests assert the wire
 // shape instead of waiting for a download, which is the whole division of
@@ -176,6 +177,17 @@ fn test_global_stat_and_option_caches_follow_their_mutations() {
 	_ = m.handle_payload('{"jsonrpc":"2.0","id":5,"method":"aria2.changeGlobalOption","params":[{"dir":"D:/new"}]}')
 	opts_raw = m.handle_payload('{"jsonrpc":"2.0","id":6,"method":"aria2.getGlobalOption","params":[]}')
 	assert any_str(field(any_map(result_of(opts_raw)), 'dir')) == 'D:/new', opts_raw
+}
+
+fn test_direct_json_string_matches_json2() {
+	for value in ['plain', 'a"b', 'a\\b', 'line\nbreak', 'tab\there', 'control\u0001'] {
+		mut sb := strings.new_builder(64)
+		write_json_string(mut sb, value)
+		assert sb.str() == json2.encode(value), '${value}: ${sb.str()} != ${json2.encode(value)}'
+		unsafe {
+			sb.free()
+		}
+	}
 }
 
 fn test_readiness_reflects_manager_state() {

@@ -353,12 +353,56 @@ fn (mut b RowBuilder) sep() {
 	b.first = false
 }
 
+fn hex_digit(n u8) string {
+	if n < 10 {
+		return [u8(n + `0`)].bytestr()
+	}
+	return [u8(n - 10 + `a`)].bytestr()
+}
+
+// write_json_string escapes directly into the row builder. json2.encode is
+// correct but allocates a new string for every one of the ~12 string fields
+// in a tellStatus row.
+fn write_json_string(mut sb strings.Builder, value string) {
+	sb.write_byte(`"`)
+	for i := 0; i < value.len; i++ {
+		c := value[i]
+		match c {
+			`"` {
+				sb.write_string('\\"')
+			}
+			`\\` {
+				sb.write_string('\\\\')
+			}
+			`\n` {
+				sb.write_string('\\n')
+			}
+			`\r` {
+				sb.write_string('\\r')
+			}
+			`\t` {
+				sb.write_string('\\t')
+			}
+			else {
+				if c < 0x20 {
+					sb.write_string('\\u00')
+					sb.write_string(hex_digit(c >> 4))
+					sb.write_string(hex_digit(c & 0x0f))
+				} else {
+					sb.write_u8(c)
+				}
+			}
+		}
+	}
+	sb.write_byte(`"`)
+}
+
 fn (mut b RowBuilder) add_str(key string, value string) {
 	b.sep()
 	b.sb.write_byte(`"`)
 	b.sb.write_string(key)
 	b.sb.write_string('":')
-	b.sb.write_string(json2.encode(value))
+	write_json_string(mut b.sb, value)
 }
 
 fn (mut b RowBuilder) add_num(key string, value string) {
