@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>aria2v — the transfer manager, not a fork</title>
+  <meta name="description" content="A download engine in pure V: multi-connection HTTP(S), resumable, with the aria2 JSON-RPC surface Fluxget already calls.">
+  <meta property="og:title" content="aria2v">
+  <meta property="og:description" content="A download engine in pure V. Not a fork of aria2 — the part Fluxget needs.">
+  <meta property="og:type" content="website">
+  <link rel="stylesheet" href="assets/style.css">
+  <script src="assets/main.js" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="#top"><span class="mark">a2</span> aria2v</a>
+      <nav class="site-nav" aria-label="Main">
+        <a href="#features">What it does</a>
+        <a href="#how">How it works</a>
+        <a href="#start">Quick start</a>
+        <a href="https://github.com/metif12/aria2v" rel="noopener">GitHub</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="top">
+    <div class="wrap">
+      <section class="hero">
+        <div class="eyebrow">Pure V · HTTP(S) · drop-in RPC surface</div>
+        <h1>The transfer manager, not a fork.</h1>
+        <p class="lede">
+          aria2v is the download engine Fluxget needs, written from scratch in V.
+          <strong>Same JSON-RPC shape, same session format</strong> — so switching
+          engines is a host and port change, and reverting is the same change
+          backwards.
+        </p>
+        <div class="actions">
+          <a class="btn btn-primary" href="#start">Get started <span aria-hidden="true">→</span></a>
+          <a class="btn btn-ghost" href="https://github.com/metif12/aria2v" rel="noopener">View source</a>
+        </div>
+        <div class="status" aria-label="Milestone status">
+          <span class="pill done">M0 · manager brain — done</span>
+          <span class="pill done">M1 · HTTP transfer — done</span>
+          <span class="pill done">M2 · RPC cut-over — done</span>
+          <span class="pill next">M3 · engine parity — next</span>
+        </div>
+      </section>
+
+      <section class="block reveal" id="features">
+        <div class="section-head">
+          <h2>What it actually does</h2>
+          <p>No marketing adjectives below. Each line is something with a test behind it.</p>
+        </div>
+        <div class="grid">
+          <article class="card">
+            <h3>Multi-connection HTTP(S)</h3>
+            <p>One file, N byte ranges. Even split, remainder on segment zero — the arithmetic aria2 uses, so the progress bar finishes when it looks finished.</p>
+          </article>
+          <article class="card">
+            <h3>Resume from a prefix</h3>
+            <p>Reads what is on disk and plans only the remainder. An overshooting offset produces an empty plan, never a request for a byte that does not exist.</p>
+          </article>
+          <article class="card">
+            <h3>Honest about Range</h3>
+            <p>A one-byte probe detects a server that ignores <code>Range</code> and collapses to one connection instead of writing N full bodies into one file.</p>
+          </article>
+          <article class="card">
+            <h3>A session file you can trust</h3>
+            <p>aria2's own flat format, written atomically by rename. A corrupt line costs one entry, never the queue — and the loss count is reported.</p>
+          </article>
+          <article class="card">
+            <h3>The RPC surface Fluxget calls</h3>
+            <p>25 methods on loopback JSON-RPC: string-valued numbers, the leading <code>token:</code> argument, <code>system.multicall</code>, and all.</p>
+          </article>
+          <article class="card">
+            <h3>Built by the same <code>v</code></h3>
+            <p>No C shims, no GPL binary fetched by a script, no second HTTP stack. V's <code>net.http</code> owns the wire; this repo owns the manager.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="block reveal" id="how">
+        <div class="section-head">
+          <h2>Where the complexity lives</h2>
+          <p>The manager is pure enough to test without a network. Only one file in the engine opens a socket.</p>
+        </div>
+        <div class="flow">
+          <div class="step"><span class="num">01</span><h3>Probe</h3><p>Ask for one byte. Learn the total length and whether ranges are honoured.</p></div>
+          <div class="step"><span class="num">02</span><h3>Plan</h3><p>Subtract the on-disk prefix. Split the remainder into even, inclusive ranges.</p></div>
+          <div class="step"><span class="num">03</span><h3>Create once</h3><p>Size the output file before workers start, so nobody truncates another's bytes.</p></div>
+          <div class="step"><span class="num">04</span><h3>Fetch</h3><p>One streaming downloader per range, each writing at its own offset.</p></div>
+          <div class="step"><span class="num">05</span><h3>Account</h3><p>Collect results over a channel; a failed segment fails the whole download.</p></div>
+        </div>
+      </section>
+
+      <section class="block reveal" id="start">
+        <div class="section-head">
+          <h2>Quick start</h2>
+          <p>V 0.5.2. <code>v fmt</code> is law. Tests are network-free — 60 of them across five module test files.</p>
+        </div>
+        <div class="code">
+          <div class="code-bar"><span>PowerShell</span><button class="copy" type="button" data-copy="body">Copy</button></div>
+<pre><span class="c"># build</span>
+git clone https://github.com/metif12/aria2v.git
+cd aria2v
+v build -o aria2v.exe .
+
+<span class="c"># see the arithmetic before touching the network</span>
+./aria2v.exe plan https://example.com/big.bin 104857600 8
+
+<span class="c"># fetch for real, resuming from what is on disk</span>
+./aria2v.exe download https://example.com/big.bin -x 8 -d D:/Downloads
+
+<span class="c"># serve Fluxget's JSON-RPC surface on loopback</span>
+./aria2v.exe serve --addr 127.0.0.1:9009 --secret change-me
+
+<span class="c"># verify</span>
+v test .</pre>
+        </div>
+      </section>
+
+      <section class="block reveal" id="docs">
+        <div class="section-head">
+          <h2>Read the decisions</h2>
+          <p>Short documents, because a choice you can only reconstruct from a conversation is a choice the next person makes differently.</p>
+        </div>
+        <div class="links">
+          <a class="link-card" href="https://github.com/metif12/aria2v/blob/main/docs/CLI.md"><strong>CLI reference</strong><span>Every command and flag, pure and live.</span></a>
+          <a class="link-card" href="https://github.com/metif12/aria2v/blob/main/docs/ARCHITECTURE.md"><strong>Architecture</strong><span>The purity boundary and the transfer path.</span></a>
+          <a class="link-card" href="https://github.com/metif12/aria2v/blob/main/docs/RPC.md"><strong>RPC reference</strong><span>The 25 methods and the four wire quirks.</span></a>
+          <a class="link-card" href="https://github.com/metif12/aria2v/blob/main/ROADMAP.md"><strong>Roadmap</strong><span>What is done, what is next, what is not coming.</span></a>
+          <a class="link-card" href="https://github.com/metif12/aria2v/blob/main/docs/compat/fluxget.md"><strong>Fluxget compatibility</strong><span>The exact aria2.* subset, extracted from the app.</span></a>
+          <a class="link-card" href="https://github.com/metif12/aria2v/tree/main/docs"><strong>ADRs</strong><span>Why the session format is aria2's, and why HTTP is not ours.</span></a>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <span>aria2v · MIT · built in pure V</span>
+      <span><a href="https://github.com/metif12/aria2v" rel="noopener">metif12/aria2v</a></span>
+    </div>
+  </footer>
+</body>
+</html>

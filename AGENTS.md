@@ -6,8 +6,12 @@ disagree, the stricter one wins: this code will run in Fluxget's process space.
 ## 1. Purity
 
 - `internal/plan`, `internal/link` and `internal/session` are **pure**. No sockets,
-  no `http.`, no `net.`, no `time.` in anything that is not `main.v` or a module
-  named `transfer`.
+  no `http.`, no `net.`, no `time.` outside `main.v`, `internal/transfer` and
+  `internal/rpc`.
+- `internal/transfer/transfer.v` stays pure by taking a `Fetcher` interface. The
+  only production implementation that opens a socket is
+  `internal/transfer/http_fetcher.v`. A new network path must go behind the same
+  interface or this rule is broken.
 - `v test` never touches the network and never starts a download. Anything that
   does is behind an env var and capped at 1 MiB, the same ceiling Fluxget uses.
 - A test that cannot fail is worse than no test. Disable the rule, watch the
@@ -32,6 +36,10 @@ Read once, and add to the list when you meet a new one:
   `json2.encode(x)`.
 - `os.read_bytes` refuses a path containing `..`, and `os.join_path` **quotes** an
   argument starting with `..`. Build the path yourself and normalise it by hand.
+- `http.download_file_with_progress` only forwards chunks to a custom Downloader
+  when the status is **200**; a ranged answer is 206 and receives no chunks. Use
+  `FetchConfig.on_progress_body` instead — it fires for 206 too, with the status
+  code as an argument. Its `user_ptr` is a `voidptr`; cast it inside `unsafe`.
 
 ## 3. The session file is the contract, not an implementation detail
 
@@ -46,7 +54,8 @@ Read once, and add to the list when you meet a new one:
 
 ## 4. Definition of done
 
-- `v test ./...` green, and green on the tree you are about to commit.
+- `v test .` green (the `./...` form finds zero test files in V 0.5.2), and green
+  on the tree you are about to commit.
 - `v fmt -w .` clean.
 - New public behaviour has a test in the same commit.
 - A `README.md` line if it changes what the engine can do — including what it

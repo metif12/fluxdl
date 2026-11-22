@@ -1,18 +1,27 @@
 # aria2v
 
-A download engine in pure V. Not a fork of aria2 — the part of it Fluxget needs,
-written from scratch, with the same JSON-RPC surface so the swap is reversible.
+[![docs](https://img.shields.io/badge/docs-aria2v.dev-blue)](https://metif12.github.io/aria2v/)
+[![V 0.5.2](https://img.shields.io/badge/V-0.5.2-7f8caa.svg)](https://vlang.io)
+[![license: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+
+A download engine in pure V. Not a fork of aria2 — the transfer manager Fluxget
+needs, written from scratch, with the same JSON-RPC surface so the swap is
+reversible.
+
+**[Project site and documentation](https://metif12.github.io/aria2v/)** ·
+[Quick start](docs/CLI.md) · [Architecture](docs/ARCHITECTURE.md) ·
+[RPC reference](docs/RPC.md) · [Roadmap](ROADMAP.md)
 
 ## Why this exists
 
 Fluxget is a download manager built on top of `aria2c` as a child process. That
 was the right call and it is documented in
-[ADR-0003](../fluxget/docs/ADR/0003-compete-without-owning-the-transfer.md): owning
-the transfer means owning BitTorrent's attack surface, and a download manager with
-a webview in it should not.
+[ADR-0003](https://github.com/metif12/fluxget/blob/main/docs/ADR/0003-compete-without-owning-the-transfer.md):
+owning the transfer means owning BitTorrent's attack surface, and a download
+manager with a webview in it should not.
 
-This repo exists for the three reasons a fork of C++ is not a good answer, and it
-is scoped to those:
+This repo exists for the three reasons a fork of C++ is not a good answer, and
+it is scoped to those:
 
 1. **Fluxget runs on Windows only today, and aria2c ships as a GPL binary from a
    script.** A pure-V engine is built by the same `v` that builds the app.
@@ -21,23 +30,23 @@ is scoped to those:
 3. **A compile error is a build failure; a segfault in `aria2c 1.37.0` at 3am is a
    bug report with no stack.**
 
-It is NOT a drop-in replacement for aria2c today. What it does is below.
-
-## What it does
+## What it does today
 
 | | |
 |---|---|
 | **Multi-connection downloads over HTTP(S)** | One file, N ranges, `Range: bytes=first-last`. The split is even with the remainder on segment zero, which is what aria2 does and what makes the progress bar finish when it looks finished. |
 | **Resume** | Reads what is on disk and plans only the remainder. An offset that overshoots the file yields an empty plan rather than a request for a byte that does not exist. |
-| **Minimum segment size** | A file too small to split is fetched with one connection, because eight 128 KiB pieces each cost a round trip and finish no sooner. |
+| **Servers that ignore `Range`** | A one-byte probe detects a 200 answer and collapses the download to one connection instead of writing N copies of the body into one file. |
 | **Session save/restore in aria2's own format** | `--save-session` written flat, atomic by rename, and a reader that loses **one** line on corruption rather than the whole queue. |
 | **Mirror sets** | De-duplicated, ordered, and labelled by kind — a `.torrent` path is bytes, a magnet is its own protocol, a URL is HTTP. |
 | **Per-download options** | Where aria2's own option names apply. |
+| **The JSON-RPC subset Fluxget calls** | `addUri`, `tellStatus`, `tellActive/Waiting/Stopped`, pause/unpause, remove, `getFiles`, `getUris`, `getOption`, `changeOption`, global stat/options, `saveSession`, `shutdown`, `system.multicall`, `system.listMethods` — on the same loopback POST shape, with string-valued numbers and the leading `token:` argument. |
 
 What it reads is what `aria2c 1.37.0` was measured to write on this machine: a
 multi-mirror `addUri` comes back from `aria2.getUris` as **five rows for two
-URLs**, because aria2 expands the set internally. A reader that mapped rows to
-mirrors one-for-one would report a per-mirror count that is a fiction.
+URLs**, because aria2 expands the set internally. aria2v reports one row per
+source instead; that difference is deliberate and is called out in
+[the compatibility note](docs/compat/fluxget.md).
 
 ## What it does not do
 
@@ -50,8 +59,27 @@ Honest, because a list like this is the only thing that makes the list useful.
 - **Checksums** — algorithm dispatch, and the resume question of which checksum
   wins when two definitions disagree.
 - **Cookie/robots handling, mirror liveness probing.**
-- **The daemon part** — this is the engine, and Fluxget already owns the
-  supervision (restart, backoff, readiness) in `aria2ctl/`.
+- **The daemon part** — Fluxget already owns supervision (restart, backoff,
+  readiness) in `aria2ctl/`. This is the engine and its RPC server.
+
+## Install and use
+
+```powershell
+git clone https://github.com/metif12/aria2v.git
+cd aria2v
+v build -o aria2v.exe .          # V 0.5.2
+
+# See what a 100 MiB download would fetch in eight ranges:
+./aria2v.exe plan https://example.com/big.bin 104857600 8
+
+# Fetch it for real:
+./aria2v.exe download https://example.com/big.bin -x 8 -d D:/Downloads
+
+# Run Fluxget's JSON-RPC surface on loopback:
+./aria2v.exe serve --addr 127.0.0.1:9009 --secret change-me --session D:/Downloads/aria2v.session
+```
+
+Full CLI reference: [docs/CLI.md](docs/CLI.md).
 
 ## Layout
 
@@ -62,35 +90,36 @@ internal/
   plan/    plan.v         how one download is split into byte ranges
   link/    link.v         what an address means, and what to call the file
   session/ session.v      the queue on disk, in aria2's format
+  transfer/               the engine: probe, concurrent fetch, byte accounting
+    transfer.v            pure manager; the HTTP path is injected
+    http_fetcher.v        the only file here that opens a socket
+  rpc/                    loopback JSON-RPC, exactly the subset Fluxget calls
+docs/                     the GitHub Pages site and the decision records
 ```
 
 `plan`, `link` and `session` are pure: no sockets, no files except the session's
-own temp files, no time. They are tested against strings, which is why the
-interesting bugs are found without a network.
+own temp files, no time. `transfer` keeps its manager pure by taking a `Fetcher`
+interface; only `http_fetcher.v` uses `net.http`. That is why the interesting
+bugs are found without a network.
 
-The transfer itself uses V's `net.http`, which already does TLS, redirects,
-chunked encoding, and streaming with a `Downloader` interface. Hand-rolling that
-would be a second implementation of a protocol this project does not want to own.
-
-## The RPC surface, and the cut-over
-
-The plan is to expose the subset of `aria2.tellStatus` / `addUri` / `pause` /
-`unpause` / `remove` / `getGlobalOption` / `system.multicall` that Fluxget already
-calls, on the same loopback HTTP JSON-RPC shape. Then the swap is a change of host
-and port, and reverting is the same change backwards.
-
-That is not written yet. This commit is the foundation and the tests for it.
-
-## Building and testing
+## Testing
 
 ```powershell
-v test ./...          # all modules
-v run . -- plan https://example.com/f.bin 1048576
+v test .                  # 60 tests across five module test files
+v fmt -w .                # v fmt is law
 ```
 
-V 0.5.2 is required. `v fmt` is law.
+V 0.5.2 is required. Tests are network-free. The `download` and `serve`
+commands are the only paths that touch a socket, and both are exercised by hand
+or by Fluxget's own contract suite, not by `v test`.
 
 ## Network use
 
-Tests are network-free and stay that way. The one exception is an opt-in smoke
-test, behind `ARIA2V_SMOKE_URL`, capped at 1 MiB, the same ceiling Fluxget uses.
+Tests are network-free and stay that way. Every network path is behind a CLI
+command or the RPC server. The probe in `internal/transfer/http_fetcher.v`
+reads one byte to learn whether the server honours `Range` and what the total
+length is; nothing is fetched speculatively.
+
+## License
+
+MIT — see [LICENSE](LICENSE).

@@ -1,5 +1,6 @@
 # V build outputs
 *.exe
+*.manifest
 /v/
 
 # V's cache

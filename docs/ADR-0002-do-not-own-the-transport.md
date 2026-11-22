@@ -45,6 +45,12 @@ repo reimplements HTTP, and nothing in it opens a raw socket.
   and the dependency direction is one-way.
 - A bug in the transport is a bug in V's stdlib and is not fixable here. That is a
   real cost, and it is the point: it is a cost someone else carries.
+- `net.http`'s own streaming `Downloader` forwards chunks only for status 200,
+  not 206. `internal/transfer/http_fetcher.v` therefore uses
+  `FetchConfig.on_progress_body`, which receives every chunk with its status
+  code, and writes it at the segment's offset. Still `net.http`; just the lower
+  level of its API. The probe body is capped at 64 bytes, so no file is buffered
+  in memory just to learn its length.
 - If V's `net.http` stops being good enough — no connection reuse, or a progress
   interface that cannot express what we need — this ADR is what gets revisited,
   and the plan module survives the change either way.

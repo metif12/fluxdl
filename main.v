@@ -1,36 +1,40 @@
 // main.v - the aria2v CLI.
 //
-// Phase 0 of this repo is a working tool for the parts that exist: plan a
-// download, and round-trip the session file. The engine itself is the next
-// commit, which is why this does not fetch anything.
-//
-//   aria2v plan <url> <bytes> [connections] [min-segment-bytes]
-//   aria2v session <path>
-//
-// Every subcommand is a thin call into internal/, which is where the logic lives.
-// The CLI's job is argument handling and printing, and nothing else - a CLI that
-// also holds logic is a CLI that cannot be tested by vlib's test runner.
+// Two kinds of command live here. `plan`, `session` and `suggest` are pure and
+// exist to make the engine's arithmetic inspectable without a network.
+// `download` and `serve` are the real engine, and are thin calls into
+// internal/transfer and internal/rpc - a CLI that also holds logic is a CLI
+// that cannot be tested by vlib's test runner.
 module main
 
 import os
 import aria2v.internal.link
 import aria2v.internal.plan
+import aria2v.internal.rpc
 import aria2v.internal.session
+import aria2v.internal.transfer
 
 fn usage() {
-	print('aria2v - a download engine in pure V
+	print('aria2v ${rpc.version} - a download engine in pure V
 
   aria2v plan <url> <bytes> [connections] [min-segment]
-      Print the byte ranges a download of <bytes> would fetch. The point is the
-      arithmetic: even segments, remainder on the first, nothing past the end.
+      Print the byte ranges a download of <bytes> would fetch.
 
   aria2v session <path>
-      Read a session file and print what came back, and how many lines were lost
-      to corruption. The loss count is the interesting half.
+      Read a session file and print what came back, and how many lines were
+      lost to corruption.
 
   aria2v suggest <url>
       Print the folder a URL implies.
 
+  aria2v download <url> [-d dir] [-o name] [-x connections] [--min-segment bytes]
+      Fetch a URL with N ranges, writing one file. Resumes from the bytes
+      already on disk.
+
+  aria2v serve [--addr 127.0.0.1:9009] [--secret token] [--session path]
+      Run the loopback JSON-RPC server that Fluxget talks to.
+
+  aria2v --version
 ')
 }
 
@@ -40,11 +44,20 @@ fn main() {
 		usage()
 		exit(1)
 	}
+	if args[1] == '--version' || args[1] == '-V' {
+		println(rpc.version)
+		return
+	}
 	match args[1] {
 		'plan' { cmd_plan(args[2..]) }
 		'session' { cmd_session(args[2..]) }
 		'suggest' { cmd_suggest(args[2..]) }
-		else { usage() }
+		'download' { cmd_download(args[2..]) }
+		'serve' { cmd_serve(args[2..]) }
+		else {
+			usage()
+			exit(1)
+		}
 	}
 }
 
@@ -105,4 +118,126 @@ fn cmd_suggest(args []string) {
 	}
 	s := link.suggest(args[0])
 	println(if s == '' { 'nothing to suggest from that address' } else { s })
+}
+
+// cmd_download is the engine without the daemon: one URL, one file, N ranges.
+// It is the same path `aria2v serve` takes, minus the JSON-RPC envelope.
+fn cmd_download(args []string) {
+	mut url := ''
+	mut dir := os.getenv('ARIA2V_DIR')
+	if dir == '' {
+		dir = os.getwd()
+	}
+	mut out := ''
+	mut connections := 4
+	mut min_segment := i64(0)
+	mut i := 0
+	for i < args.len {
+		a := args[i]
+		match a {
+			'-d' {
+				i++
+				if i < args.len {
+					dir = args[i]
+				}
+			}
+			'-o' {
+				i++
+				if i < args.len {
+					out = args[i]
+				}
+			}
+			'-x' {
+				i++
+				if i < args.len {
+					connections = args[i].int()
+				}
+			}
+			'--min-segment' {
+				i++
+				if i < args.len {
+					min_segment = args[i].i64()
+				}
+			}
+			else {
+				if url == '' {
+					url = a
+				}
+			}
+		}
+		i++
+	}
+	if url == '' {
+		eprintln('download needs a url')
+		exit(1)
+	}
+
+	l := link.parse(url) or {
+		eprintln('aria2v: ${err.msg()}')
+		exit(1)
+	}
+	if out == '' {
+		out = link.safe_name(l.name)
+	}
+	path := os.join_path(dir, out)
+
+	mut fetcher := &transfer.HttpFetcher{}
+	meta := fetcher.head(url) or {
+		eprintln('aria2v: ${err.msg()}')
+		exit(1)
+	}
+	done := if os.exists(path) { os.file_size(path) } else { i64(0) }
+	if done >= meta.length {
+		println('${path}: already complete (${done} bytes)')
+		return
+	}
+	mut progress := &transfer.Progress{}
+	n := transfer.download(url, meta.length, done, path, transfer.Options{
+		connections: connections
+		min_segment: min_segment
+	}, fetcher, mut progress) or {
+		eprintln('aria2v: ${err.msg()}')
+		exit(1)
+	}
+	println('${path}: ${progress.value} of ${meta.length} bytes (${n} fetched this run)')
+}
+
+fn cmd_serve(args []string) {
+	mut addr := '127.0.0.1:9009'
+	mut secret := os.getenv('ARIA2V_SECRET')
+	mut session_path := os.getenv('ARIA2V_SESSION')
+	if session_path == '' {
+		session_path = os.join_path(os.temp_dir(), 'aria2v.session')
+	}
+	mut i := 0
+	for i < args.len {
+		a := args[i]
+		match a {
+			'--addr' {
+				i++
+				if i < args.len {
+					addr = args[i]
+				}
+			}
+			'--secret' {
+				i++
+				if i < args.len {
+					secret = args[i]
+				}
+			}
+			'--session' {
+				i++
+				if i < args.len {
+					session_path = args[i]
+				}
+			}
+			else {
+				eprintln('aria2v: unknown serve option ${a}')
+				exit(1)
+			}
+		}
+		i++
+	}
+	println('aria2v ${rpc.version} listening on ${addr} (JSON-RPC POST /jsonrpc)')
+	rpc.serve(addr, secret, session_path)
 }

@@ -15,45 +15,48 @@ All pure, no sockets.
 | | |
 |---|---|
 | **Adds** | byte-range planning (multi-connection + resume), URL/name/folder derivation, aria2-format session save/load |
-| **Proves** | 30 tests. Resume from a partial prefix; an overshooting offset plans nothing rather than a bogus `Range`; a corrupt session line costs one entry; the write is atomic |
+| **Proves** | resume from a partial prefix; an overshooting offset plans nothing rather than a bogus `Range`; a corrupt session line costs one entry; the write is atomic |
 | **Still absent** | the transfer itself, the daemon, BitTorrent, everything |
 
-**Not done and unknown:** whether the plan is right against a server that ignores
-`Range` and returns 200. That is Milestone 1's test.
-
-## Milestone 1 — HTTP + HTTPS transfer ← NEXT
+## Milestone 1 — HTTP + HTTPS transfer ✅ DONE
 
 `internal/transfer` over `net.http`, with a `Downloader` that writes into a
 `plan.Segment` at its offset, and N of them running concurrently per download.
 
 | | |
 |---|---|
-| **Adds** | multi-connection resumable HTTP(S) download, progress + speed + ETA, per-download options |
-| **Proves** | a 1 MiB file fetched with N connections reassembles byte-identical to the source (hash, not length); a killed download resumes from the prefix; a server that returns 200 for a Range request is detected and the plan collapses to one segment |
+| **Adds** | multi-connection resumable HTTP(S) download, a one-byte Range probe, per-download options, the `download` CLI |
+| **Proves** | a resumed download fetches only the remainder; a server that answers 200 to a Range request is detected and the plan collapses to one segment; a failed segment fails the whole download; every byte written is counted |
 | **Still absent** | FTP, BitTorrent, Metalink, checksum verification, mirror liveness probing |
 
-**The trap I expect:** `net.http.download_file_with_progress` gives no control over
-the *connection*, so N connections means N calls, and each one must open its own
-file handle at its own offset. That is also where the plan either pays off or is
-shown to be decoration.
+**The trap that was expected:** `net.http.download_file_with_progress` gives no
+control over the *connection*, so N connections means N calls, and each one must
+open its own file handle at its own offset. The file is now created and sized
+once before the workers start — N workers racing to create it would each
+truncate it, and the last truncate would win over bytes already written.
 
-## Milestone 2 — the RPC surface and the cut-over
+## Milestone 2 — the RPC surface and the cut-over ✅ DONE
 
 The subset of `aria2.*` Fluxget already calls, on the same loopback HTTP JSON-RPC
 shape, so the swap is a host/port change.
 
 | | |
 |---|---|
-| **Adds** | `addUri`, `tellStatus`, `tellActive`, `pause`, `unpause`, `remove`, `removeDownloadResult`, `getGlobalOption`, `changeGlobalOption`, `changeOption`, `getFiles`, `getUris`, `system.multicall`, `saveSession`, `shutdown` |
-| **Proves** | Fluxget's `platform/contract_test.v` passes against aria2v's server with its fake swapped for ours. That is the whole cut-over test and it already exists |
-| **Still absent** | BitTorrent |
+| **Adds** | `addUri`, `tellStatus`, `tellActive`, `tellWaiting`, `tellStopped`, `pause`, `unpause`, `pauseAll`, `unpauseAll`, `remove`, `removeDownloadResult`, `getFiles`, `getServers`, `getUris`, `getOption`, `changeOption`, `getPeers`, `getGlobalStat`, `getVersion`, `getGlobalOption`, `changeGlobalOption`, `saveSession`, `shutdown`, `system.multicall`, `system.listMethods` |
+| **Proves** | string-valued numbers; the leading `token:` argument is stripped before dispatch and not repeated inside multicall; a failed download carries `errorCode`/`errorMessage` and never `error`; `saveSession` writes an aria2-format file |
+| **Still absent** | BitTorrent, and the one deliberate wire difference: aria2 expands two mirrors into five `getUris` rows, aria2v returns one row per source |
 
 **Why this order:** it makes the engine replaceable *before* it is good. The
 furthest an incomplete engine can get is "runs the app's own contract", and
 getting there early means every milestone after it is measured by the app rather
 than by my own tests.
 
-## Milestone 3 — the engine Fluxget already has, in V
+**What "done" does not mean here:** Fluxget's `platform/contract_test.v` has not
+been run against this server in this repo. That is the cut-over test and it
+belongs in Fluxget's tree, where the fake is swapped for us. The list above is
+what makes that test possible, not a claim that it has passed.
+
+## Milestone 3 — the engine Fluxget already has, in V ← NEXT
 
 Supervision (restart, backoff, readiness), the session round trip, the mirror set
 behaviour from Phase 4, and the notice queue.

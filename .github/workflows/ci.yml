@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install V
+        run: |
+          git clone --depth=1 https://github.com/vlang/v.git "$RUNNER_TEMP/v"
+          make -C "$RUNNER_TEMP/v"
+          sudo "$RUNNER_TEMP/v/v" symlink
+      - name: Version
+        run: v version
+      - name: Check formatting
+        run: v fmt -check .
+      - name: Test
+        run: v test .
+      - name: Build CLI
+        run: v build -o aria2v .
+      - name: Smoke-check CLI
+        run: ./aria2v --version
