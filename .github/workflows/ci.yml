@@ -19,7 +19,7 @@ jobs:
       - name: Version
         run: v version
       - name: Check formatting
-        run: v fmt -check .
+        run: v fmt -verify .
       - name: Test
         run: v test .
       - name: Build CLI
