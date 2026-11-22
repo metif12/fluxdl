@@ -28,10 +28,52 @@ pub fn hash_bytes(data []u8, algo string) !string {
 	}
 }
 
-// hash_file returns the hex digest of a completed download.
+// hash_file streams a completed download through the digest in 64 KiB chunks.
+// A 4 GiB file must not become a 4 GiB string just to be verified.
 pub fn hash_file(path string, algo string) !string {
-	data := os.read_file(path)!
-	return hash_bytes(data.bytes(), algo)
+	mut file := os.open_file(path, 'r')!
+	defer {
+		file.close()
+	}
+	mut buf := []u8{len: 64 * 1024}
+	match algo.to_lower() {
+		'md5' {
+			mut digest := md5.new()
+			for {
+				n := file.read(mut buf) or { break }
+				if n == 0 {
+					break
+				}
+				digest.write(buf[..n])!
+			}
+			return hex.encode(digest.sum([]), hex.EncodeParams{})
+		}
+		'sha1' {
+			mut digest := sha1.new()
+			for {
+				n := file.read(mut buf) or { break }
+				if n == 0 {
+					break
+				}
+				digest.write(buf[..n])!
+			}
+			return hex.encode(digest.sum([]), hex.EncodeParams{})
+		}
+		'sha256' {
+			mut digest := sha256.new()
+			for {
+				n := file.read(mut buf) or { break }
+				if n == 0 {
+					break
+				}
+				digest.write(buf[..n])!
+			}
+			return hex.encode(digest.sum([]), hex.EncodeParams{})
+		}
+		else {
+			return error('checksum: unsupported algorithm ${algo}')
+		}
+	}
 }
 
 // verify_file picks the algorithm from the expected digest length and compares.
