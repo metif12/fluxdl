@@ -242,7 +242,7 @@ pub fn (mut m Manager) handle_payload(raw string) string {
 		return fail(null_id(), -32600, 'Invalid Request')
 	}
 	id := req.id
-	mut params := req.params.clone()
+	params := req.params
 
 	if m.secret != '' {
 		provided := if params.len > 0 { any_str(params[0]) } else { '' }
@@ -250,13 +250,18 @@ pub fn (mut m Manager) handle_payload(raw string) string {
 			return fail(id, -32000, 'Unauthorized')
 		}
 	}
-	if params.len > 0 && any_str(params[0]).starts_with('token:') {
-		params = params[1..]
+	// Slicing shares storage; it does not need the clone a mutating local
+	// would. The token is checked on the original params, then removed for
+	// dispatch exactly as aria2 does.
+	args := if params.len > 0 && any_str(params[0]).starts_with('token:') {
+		params[1..]
+	} else {
+		params
 	}
 
 	if method == 'system.multicall' {
 		mut out := []string{}
-		for call in any_arr(field_from(params, 0)) {
+		for call in any_arr(field_from(args, 0)) {
 			c := any_map(call)
 			name := any_str(field(c, 'methodName'))
 			result_json, code, msg := m.dispatch(name, any_arr(field(c, 'params')))
@@ -274,7 +279,7 @@ pub fn (mut m Manager) handle_payload(raw string) string {
 		return ok(id, '[' + out.join(',') + ']')
 	}
 
-	result_json, code, msg := m.dispatch(method, params)
+	result_json, code, msg := m.dispatch(method, args)
 	if code != 0 {
 		return fail(id, code, msg)
 	}
@@ -288,43 +293,99 @@ fn field_from(arr []json2.Any, i int) json2.Any {
 	return json2.Any(json2.Null{})
 }
 
-fn status_obj(d Download) json2.Any {
-	mut uri_rows := []json2.Any{}
-	for u in d.uris {
-		uri_rows << json2.Any(map[string]json2.Any{
-			'uri':    u
-			'status': 'used'
-		})
+// RowBuilder writes one JSON object without building an Any tree first.
+// Every field in a tellStatus row is a string on the wire, except `files`.
+struct RowBuilder {
+mut:
+	sb    strings.Builder
+	first bool = true
+}
+
+fn (mut b RowBuilder) sep() {
+	if !b.first {
+		b.sb.write_byte(`,`)
 	}
-	mut files := []json2.Any{}
-	files << json2.Any(map[string]json2.Any{
-		'index':           '1'
-		'path':            d.path
-		'length':          d.total.str()
-		'completedLength': d.completed.str()
-		'selected':        'true'
-		'uris':            json2.Any(uri_rows)
-	})
-	return json2.Any(map[string]json2.Any{
-		'gid':             d.gid
-		'status':          d.status
-		'totalLength':     d.total.str()
-		'completedLength': d.completed.str()
-		'uploadLength':    '0'
-		'bitfield':        '0'
-		'downloadSpeed':   '0'
-		'uploadSpeed':     '0'
-		'infoHash':        ''
-		'numSeeders':      '0'
-		'seeder':          'false'
-		'pieceLength':     '1048576'
-		'numPieces':       '1'
-		'connections':     '1'
-		'errorCode':       d.error_code
-		'errorMessage':    d.error_message
-		'dir':             d.dir
-		'files':           json2.Any(files)
-	})
+	b.first = false
+}
+
+fn (mut b RowBuilder) add_str(key string, value string) {
+	b.sep()
+	b.sb.write_byte(`"`)
+	b.sb.write_string(key)
+	b.sb.write_string('":')
+	b.sb.write_string(json2.encode(value))
+}
+
+fn (mut b RowBuilder) add_num(key string, value string) {
+	b.sep()
+	b.sb.write_byte(`"`)
+	b.sb.write_string(key)
+	b.sb.write_string('":"')
+	b.sb.write_string(value)
+	b.sb.write_byte(`"`)
+}
+
+fn (mut b RowBuilder) add_raw(key string, value string) {
+	b.sep()
+	b.sb.write_byte(`"`)
+	b.sb.write_string(key)
+	b.sb.write_string('":')
+	b.sb.write_string(value)
+}
+
+fn (mut b RowBuilder) done() string {
+	b.sb.write_byte(`}`)
+	res := b.sb.str()
+	unsafe {
+		b.sb.free()
+	}
+	return res
+}
+
+// encode_status is the cache miss path: build the exact tellStatus shape as
+// bytes, so a row with a large path or error message does not allocate a map
+// and a sum-type wrapper for every one of its fields.
+fn encode_status(d Download) string {
+	mut uris := []string{}
+	for u in d.uris {
+		mut ub := RowBuilder{ sb: strings.new_builder(96) }
+		ub.sb.write_byte(`{`)
+		ub.add_str('uri', u)
+		ub.add_str('status', 'used')
+		uris << ub.done()
+	}
+
+	mut fb := RowBuilder{ sb: strings.new_builder(256) }
+	fb.sb.write_byte(`{`)
+	fb.add_str('index', '1')
+	fb.add_str('path', d.path)
+	fb.add_num('length', d.total.str())
+	fb.add_num('completedLength', d.completed.str())
+	fb.add_str('selected', 'true')
+	fb.add_raw('uris', '[' + uris.join(',') + ']')
+	files_json := fb.done()
+
+	mut b := RowBuilder{ sb: strings.new_builder(512) }
+	b.sb.write_byte(`{`)
+	b.add_str('gid', d.gid)
+	b.add_str('status', d.status)
+	b.add_num('totalLength', d.total.str())
+	b.add_num('completedLength', d.completed.str())
+	b.add_num('uploadLength', '0')
+	b.add_num('bitfield', '0')
+	b.add_num('downloadSpeed', '0')
+	b.add_num('uploadSpeed', '0')
+	b.add_str('infoHash', '')
+	b.add_num('numSeeders', '0')
+	b.add_str('seeder', 'false')
+	b.add_num('pieceLength', '1048576')
+	b.add_num('numPieces', '1')
+	b.add_num('connections', '1')
+	b.add_str('errorCode', d.error_code)
+	b.add_str('errorMessage', d.error_message)
+	b.add_str('dir', d.dir)
+	b.add_raw('files', '[' + files_json + ']')
+	return b.done()
 }
 
 // status_json encodes one row once per version. Callers hold m.mu, so the
@@ -337,7 +398,7 @@ fn (mut m Manager) status_json(gid string) string {
 			return cached.json
 		}
 	}
-	encoded := json2.encode(status_obj(d))
+	encoded := encode_status(d)
 	m.status_cache[gid] = StatusCache{
 		version: d.version
 		json:    encoded
