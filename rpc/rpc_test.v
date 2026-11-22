@@ -148,3 +148,32 @@ fn test_the_status_cache_invalidates_on_every_state_change() {
 	active = m.handle_payload('{"jsonrpc":"2.0","id":5,"method":"aria2.tellActive","params":[]}')
 	assert any_arr(result_of(active)).len == 0, 'pause must invalidate the cache'
 }
+
+fn test_remove_invalidates_the_status_cache() {
+	mut m := new_test_manager('')
+	added := m.handle_payload('{"jsonrpc":"2.0","id":1,"method":"aria2.addUri","params":[["https://a/f.bin"]]}')
+	gid := any_str(result_of(added))
+	m.set_started(gid, 1024, 'f.bin', 'D:/x', 'f.bin')
+	_ = m.handle_payload('{"jsonrpc":"2.0","id":2,"method":"aria2.tellStatus","params":["${gid}"]}')
+
+	_ = m.handle_payload('{"jsonrpc":"2.0","id":3,"method":"aria2.remove","params":["${gid}"]}')
+	after := m.handle_payload('{"jsonrpc":"2.0","id":4,"method":"aria2.tellStatus","params":["${gid}"]}')
+	status := any_map(result_of(after))
+	assert any_str(field(status, 'status')) == 'removed', 'remove left a stale cached row: ${after}'
+}
+
+fn test_global_stat_and_option_caches_follow_their_mutations() {
+	mut m := new_test_manager('')
+	mut stat_raw := m.handle_payload('{"jsonrpc":"2.0","id":1,"method":"aria2.getGlobalStat","params":[]}')
+	assert any_num_str(field(any_map(result_of(stat_raw)), 'numActive')) == '0', stat_raw
+
+	_ = m.handle_payload('{"jsonrpc":"2.0","id":2,"method":"aria2.addUri","params":[["https://a/f.bin"]]}')
+	stat_raw = m.handle_payload('{"jsonrpc":"2.0","id":3,"method":"aria2.getGlobalStat","params":[]}')
+	assert any_num_str(field(any_map(result_of(stat_raw)), 'numWaiting')) == '1', stat_raw
+
+	mut opts_raw := m.handle_payload('{"jsonrpc":"2.0","id":4,"method":"aria2.getGlobalOption","params":[]}')
+	assert any_str(field(any_map(result_of(opts_raw)), 'dir')) != '', opts_raw
+	_ = m.handle_payload('{"jsonrpc":"2.0","id":5,"method":"aria2.changeGlobalOption","params":[{"dir":"D:/new"}]}')
+	opts_raw = m.handle_payload('{"jsonrpc":"2.0","id":6,"method":"aria2.getGlobalOption","params":[]}')
+	assert any_str(field(any_map(result_of(opts_raw)), 'dir')) == 'D:/new', opts_raw
+}

@@ -82,7 +82,9 @@ Three details keep the hot paths cheap:
   through a map of dynamic values, and the envelope is decoded into a struct.
   The cached poll benchmark (5,000 `tellActive` calls over 100 rows) went from
   14.6 s to ~0.77 s; the re-encoding path (500 polls that change every row)
-  went from 1.65 s to ~0.7 s.
+  went from 1.65 s to ~0.7 s. `getGlobalStat` and `getGlobalOption` are cached
+  the same way (5,000 stat calls over 100 rows: 265 ms to 46 ms), and a
+  six-call `system.multicall` tick costs ~200 ms for 5,000 rounds.
 - A one-segment transfer skips the goroutine and wait group entirely; the
   benchmark for 5,000 small downloads went from 2.52 s to 0.16 s. Multi-segment
   transfers write into preallocated result slots instead of a channel (5,000

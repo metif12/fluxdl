@@ -55,9 +55,17 @@ pub mut:
 	secret       string
 	fetcher      &transfer.Fetcher
 	status_cache map[string]StatusCache
-	auto_start   bool
-	shutdown     bool
-	counter      int
+	// Global results are cached the same way as rows: a version bump on any
+	// queue or settings mutation is the only thing that invalidates them.
+	queue_version   int
+	stat_version    int
+	stat_json       string
+	options_version int
+	option_version  int
+	option_json     string
+	auto_start      bool
+	shutdown        bool
+	counter         int
 }
 
 // new_manager creates an empty queue with aria2-like defaults.
@@ -505,6 +513,7 @@ fn (mut m Manager) dispatch(method string, p []json2.Any) (string, int, string) 
 				'active'
 			}
 			d.version++
+			m.queue_version++
 			m.downloads[gid] = d
 			return json2.encode(gid), 0, ''
 		}
@@ -522,6 +531,7 @@ fn (mut m Manager) dispatch(method string, p []json2.Any) (string, int, string) 
 					m.downloads[gid] = d
 				}
 			}
+			m.queue_version++
 			return '"OK"', 0, ''
 		}
 		'aria2.remove', 'aria2.removeDownloadResult' {
@@ -535,6 +545,8 @@ fn (mut m Manager) dispatch(method string, p []json2.Any) (string, int, string) 
 			}
 			mut d := m.downloads[gid]
 			d.status = 'removed'
+			d.version++
+			m.queue_version++
 			m.downloads[gid] = d
 			if method == 'aria2.removeDownloadResult' {
 				m.order = m.order.filter(|it| it != gid)
@@ -604,6 +616,7 @@ fn (mut m Manager) dispatch(method string, p []json2.Any) (string, int, string) 
 				d.options[k] = v
 			}
 			d.version++
+			m.queue_version++
 			m.downloads[gid] = d
 			return json2.encode(gid), 0, ''
 		}
@@ -612,7 +625,12 @@ fn (mut m Manager) dispatch(method string, p []json2.Any) (string, int, string) 
 			defer {
 				m.mu.unlock()
 			}
-			return json2.encode(any_map_of_strings(m.options)), 0, ''
+			if m.option_version == m.options_version && m.option_json != '' {
+				return m.option_json, 0, ''
+			}
+			m.option_json = json2.encode(any_map_of_strings(m.options))
+			m.option_version = m.options_version
+			return m.option_json, 0, ''
 		}
 		'aria2.changeGlobalOption' {
 			m.mu.lock()
@@ -622,12 +640,16 @@ fn (mut m Manager) dispatch(method string, p []json2.Any) (string, int, string) 
 			for k, v in string_map(field_from(p, 0)) {
 				m.options[k] = v
 			}
+			m.options_version++
 			return '"OK"', 0, ''
 		}
 		'aria2.getGlobalStat' {
 			m.mu.lock()
 			defer {
 				m.mu.unlock()
+			}
+			if m.stat_version == m.queue_version && m.stat_json != '' {
+				return m.stat_json, 0, ''
 			}
 			mut active := 0
 			mut waiting := 0
@@ -653,14 +675,12 @@ fn (mut m Manager) dispatch(method string, p []json2.Any) (string, int, string) 
 				'numStopped':      stopped.str()
 				'numStoppedTotal': stopped.str()
 			}
-			return json2.encode(stat), 0, ''
+			m.stat_json = json2.encode(stat)
+			m.stat_version = m.queue_version
+			return m.stat_json, 0, ''
 		}
 		'aria2.getVersion' {
-			mut ver := map[string]json2.Any{
-				'version':         '1.37.0-${version}'
-				'enabledFeatures': json2.Any([]json2.Any{})
-			}
-			return json2.encode(ver), 0, ''
+			return '{"version":"1.37.0-${version}","enabledFeatures":[]}', 0, ''
 		}
 		'aria2.saveSession' {
 			m.mu.lock()
@@ -722,6 +742,7 @@ fn (mut m Manager) add(uris []string, opts map[string]string) string {
 	}
 	m.downloads[gid] = d
 	m.order << gid
+	m.queue_version++
 	m.mu.unlock()
 	if m.auto_start {
 		go m.run(gid)
@@ -774,6 +795,7 @@ fn (mut m Manager) run(gid string) {
 	cur.status = 'complete'
 	cur.completed = cur.total
 	cur.version++
+	m.queue_version++
 	m.downloads[gid] = cur
 	m.mu.unlock()
 }
@@ -793,6 +815,7 @@ fn (mut m Manager) set_started(gid string, total i64, path string, dir string, o
 	d.dir = dir
 	d.out = out
 	d.version++
+	m.queue_version++
 	m.downloads[gid] = d
 }
 
@@ -809,5 +832,6 @@ fn (mut m Manager) set_error(gid string, code int, msg string) {
 	d.error_code = code.str()
 	d.error_message = msg
 	d.version++
+	m.queue_version++
 	m.downloads[gid] = d
 }
