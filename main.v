@@ -124,7 +124,7 @@ fn cmd_suggest(args []string) {
 // It is the same path `fluxdl serve` takes, minus the JSON-RPC envelope.
 fn cmd_download(args []string) {
 	mut url := ''
-	mut dir := os.getenv('ARIA2V_DIR')
+	mut dir := os.getenv('FLUXDL_DIR')
 	if dir == '' {
 		dir = os.getwd()
 	}
@@ -204,8 +204,8 @@ fn cmd_download(args []string) {
 
 fn cmd_serve(args []string) {
 	mut addr := '127.0.0.1:9009'
-	mut secret := os.getenv('ARIA2V_SECRET')
-	mut session_path := os.getenv('ARIA2V_SESSION')
+	mut secret := os.getenv('FLUXDL_SECRET')
+	mut session_path := os.getenv('FLUXDL_SESSION')
 	if session_path == '' {
 		session_path = os.join_path(os.temp_dir(), 'fluxdl.session')
 	}

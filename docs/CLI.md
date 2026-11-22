@@ -46,7 +46,7 @@ Fetches one URL into one file, resuming from the bytes already on disk.
 
 | Option | Meaning | Default |
 |---|---|---|
-| `-d <dir>` | output directory | `ARIA2V_DIR`, else the current directory |
+| `-d <dir>` | output directory | `FLUXDL_DIR`, else the current directory |
 | `-o <name>` | output file name | derived from the URL and sanitised |
 | `-x <n>` | connections (byte ranges) | `4` |
 | `--min-segment <bytes>` | below this, use one connection | `0` |
@@ -68,8 +68,8 @@ secret is a bearer token, and this is not a public API.
 | Option | Meaning | Default |
 |---|---|---|
 | `--addr <host:port>` | listen address | `127.0.0.1:9009` |
-| `--secret <token>` | required leading `token:` argument | `ARIA2V_SECRET` |
-| `--session <path>` | aria2-format session file | `ARIA2V_SESSION`, else a temp path |
+| `--secret <token>` | required leading `token:` argument | `FLUXDL_SECRET` |
+| `--session <path>` | aria2-format session file | `FLUXDL_SESSION`, else a temp path |
 
 ```powershell
 ./fluxdl.exe serve --addr 127.0.0.1:9009 --secret change-me --session D:/Downloads/fluxdl.session

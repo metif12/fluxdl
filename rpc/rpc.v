@@ -62,7 +62,7 @@ pub mut:
 
 // new_manager creates an empty queue with aria2-like defaults.
 pub fn new_manager(secret string, session_path string) &Manager {
-	mut dir := os.getenv('ARIA2V_DIR')
+	mut dir := os.getenv('FLUXDL_DIR')
 	if dir == '' {
 		dir = os.join_path(os.home_dir(), 'Downloads')
 	}
