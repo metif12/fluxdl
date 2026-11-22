@@ -3,9 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>aria2v — the transfer manager, not a fork</title>
+  <title>fluxdl — the transfer manager, not a fork</title>
   <meta name="description" content="A download engine in pure V: multi-connection HTTP(S), resumable, with the aria2 JSON-RPC surface Fluxget already calls.">
-  <meta property="og:title" content="aria2v">
+  <meta property="og:title" content="fluxdl">
   <meta property="og:description" content="A download engine in pure V. Not a fork of aria2 — the part Fluxget needs.">
   <meta property="og:type" content="website">
   <link rel="stylesheet" href="assets/style.css">
@@ -14,12 +14,12 @@
 <body>
   <header class="site-header">
     <div class="wrap">
-      <a class="brand" href="#top"><span class="mark">a2</span> aria2v</a>
+      <a class="brand" href="#top"><span class="mark">a2</span> fluxdl</a>
       <nav class="site-nav" aria-label="Main">
         <a href="#features">What it does</a>
         <a href="#how">How it works</a>
         <a href="#start">Quick start</a>
-        <a href="https://github.com/metif12/aria2v" rel="noopener">GitHub</a>
+        <a href="https://github.com/metif12/fluxdl" rel="noopener">GitHub</a>
       </nav>
     </div>
   </header>
@@ -30,14 +30,14 @@
         <div class="eyebrow">Pure V · HTTP(S) · drop-in RPC surface</div>
         <h1>The transfer manager, not a fork.</h1>
         <p class="lede">
-          aria2v is the download engine Fluxget needs, written from scratch in V.
+          fluxdl is the download engine Fluxget needs, written from scratch in V.
           <strong>Same JSON-RPC shape, same session format</strong> — so switching
           engines is a host and port change, and reverting is the same change
           backwards.
         </p>
         <div class="actions">
           <a class="btn btn-primary" href="#start">Get started <span aria-hidden="true">→</span></a>
-          <a class="btn btn-ghost" href="https://github.com/metif12/aria2v" rel="noopener">View source</a>
+          <a class="btn btn-ghost" href="https://github.com/metif12/fluxdl" rel="noopener">View source</a>
         </div>
         <div class="status" aria-label="Milestone status">
           <span class="pill done">M0 · manager brain — done</span>
@@ -102,18 +102,18 @@
         <div class="code">
           <div class="code-bar"><span>PowerShell</span><button class="copy" type="button" data-copy="body">Copy</button></div>
 <pre><span class="c"># build</span>
-git clone https://github.com/metif12/aria2v.git
-cd aria2v
-v build -o aria2v.exe .
+git clone https://github.com/metif12/fluxdl.git
+cd fluxdl
+v build -o fluxdl.exe .
 
 <span class="c"># see the arithmetic before touching the network</span>
-./aria2v.exe plan https://example.com/big.bin 104857600 8
+./fluxdl.exe plan https://example.com/big.bin 104857600 8
 
 <span class="c"># fetch for real, resuming from what is on disk</span>
-./aria2v.exe download https://example.com/big.bin -x 8 -d D:/Downloads
+./fluxdl.exe download https://example.com/big.bin -x 8 -d D:/Downloads
 
 <span class="c"># serve Fluxget's JSON-RPC surface on loopback</span>
-./aria2v.exe serve --addr 127.0.0.1:9009 --secret change-me
+./fluxdl.exe serve --addr 127.0.0.1:9009 --secret change-me
 
 <span class="c"># verify</span>
 v test .</pre>
@@ -126,13 +126,13 @@ v test .</pre>
           <p>Short documents, because a choice you can only reconstruct from a conversation is a choice the next person makes differently.</p>
         </div>
         <div class="links">
-          <a class="link-card" href="https://github.com/metif12/aria2v/blob/main/docs/PACKAGE.md"><strong>vpm package</strong><span>Install, import paths, and the public module surface.</span></a>
-          <a class="link-card" href="https://github.com/metif12/aria2v/blob/main/docs/CLI.md"><strong>CLI reference</strong><span>Every command and flag, pure and live.</span></a>
-          <a class="link-card" href="https://github.com/metif12/aria2v/blob/main/docs/ARCHITECTURE.md"><strong>Architecture</strong><span>The purity boundary and the transfer path.</span></a>
-          <a class="link-card" href="https://github.com/metif12/aria2v/blob/main/docs/RPC.md"><strong>RPC reference</strong><span>The 25 methods and the four wire quirks.</span></a>
-          <a class="link-card" href="https://github.com/metif12/aria2v/blob/main/ROADMAP.md"><strong>Roadmap</strong><span>What is done, what is next, what is not coming.</span></a>
-          <a class="link-card" href="https://github.com/metif12/aria2v/blob/main/docs/compat/fluxget.md"><strong>Fluxget compatibility</strong><span>The exact aria2.* subset, extracted from the app.</span></a>
-          <a class="link-card" href="https://github.com/metif12/aria2v/tree/main/docs"><strong>ADRs</strong><span>Why the session format is aria2's, and why HTTP is not ours.</span></a>
+          <a class="link-card" href="https://github.com/metif12/fluxdl/blob/main/docs/PACKAGE.md"><strong>vpm package</strong><span>Install, import paths, and the public module surface.</span></a>
+          <a class="link-card" href="https://github.com/metif12/fluxdl/blob/main/docs/CLI.md"><strong>CLI reference</strong><span>Every command and flag, pure and live.</span></a>
+          <a class="link-card" href="https://github.com/metif12/fluxdl/blob/main/docs/ARCHITECTURE.md"><strong>Architecture</strong><span>The purity boundary and the transfer path.</span></a>
+          <a class="link-card" href="https://github.com/metif12/fluxdl/blob/main/docs/RPC.md"><strong>RPC reference</strong><span>The 25 methods and the four wire quirks.</span></a>
+          <a class="link-card" href="https://github.com/metif12/fluxdl/blob/main/ROADMAP.md"><strong>Roadmap</strong><span>What is done, what is next, what is not coming.</span></a>
+          <a class="link-card" href="https://github.com/metif12/fluxdl/blob/main/docs/compat/fluxget.md"><strong>Fluxget compatibility</strong><span>The exact aria2.* subset, extracted from the app.</span></a>
+          <a class="link-card" href="https://github.com/metif12/fluxdl/tree/main/docs"><strong>ADRs</strong><span>Why the session format is aria2's, and why HTTP is not ours.</span></a>
         </div>
       </section>
     </div>
@@ -140,8 +140,8 @@ v test .</pre>
 
   <footer>
     <div class="wrap">
-      <span>aria2v · MIT · built in pure V</span>
-      <span><a href="https://github.com/metif12/aria2v" rel="noopener">metif12/aria2v</a></span>
+      <span>fluxdl · MIT · built in pure V</span>
+      <span><a href="https://github.com/metif12/fluxdl" rel="noopener">metif12/fluxdl</a></span>
     </div>
   </footer>
 </body>

@@ -1,8 +1,8 @@
 module rpc
 
-import aria2v.plan
-import aria2v.session
-import aria2v.transfer
+import fluxdl.plan
+import fluxdl.session
+import fluxdl.transfer
 import json2
 import os
 
@@ -20,7 +20,7 @@ pub fn (f TestFetcher) fetch(url string, seg plan.Segment, path string) !i64 {
 }
 
 fn new_test_manager(secret string) &Manager {
-	dir := os.join_path(os.temp_dir(), 'aria2v-rpc-test')
+	dir := os.join_path(os.temp_dir(), 'fluxdl-rpc-test')
 	os.mkdir_all(dir) or {}
 	p := os.join_path(dir, 'test.session')
 	os.rm(p) or {}

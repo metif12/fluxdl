@@ -17,7 +17,7 @@ the RPC half.
 
 ## Decision
 
-**aria2v owns the manager; `net.http` owns the wire.**
+**fluxdl owns the manager; `net.http` owns the wire.**
 
 The manager is: what to download, which bytes, how many connections, resume,
 progress, session, queue state. The wire is: TCP, TLS, headers, bodies.

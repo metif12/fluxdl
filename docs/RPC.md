@@ -1,6 +1,6 @@
 # JSON-RPC reference
 
-aria2v serves the same loopback shape Fluxget talks to today:
+fluxdl serves the same loopback shape Fluxget talks to today:
 
 - `POST /jsonrpc`, `Content-Type: application/json`;
 - a JSON-RPC 2.0 envelope with `jsonrpc`, `id`, and either `result` or `error`;
@@ -12,7 +12,7 @@ Every numeric field in a result is a **string** (`"completedLength":"1048576"`).
 That is not a stylistic choice — it is what `aria2c 1.37.0` was measured to send
 and what Fluxget parses.
 
-Start the server with `aria2v serve --secret <token>`. With no secret configured,
+Start the server with `fluxdl serve --secret <token>`. With no secret configured,
 the token argument is optional.
 
 ## Methods
@@ -67,7 +67,7 @@ and are asserted in `rpc/rpc_test.v`:
    calls. Dispatch never sees it.
 2. Every number is a **string**, including nested ones like `totalLength`.
 3. `aria2.getUris` returns **one row per source, expanded** in aria2 — two URLs
-   came back as five rows. aria2v returns one row per source. This is a known,
+   came back as five rows. fluxdl returns one row per source. This is a known,
    deliberate difference; see [compat/fluxget.md](compat/fluxget.md).
 4. `aria2.tellStatus` answers with `errorCode` and `errorMessage` for a failed
    download, and **never** with an `error` field.

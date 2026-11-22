@@ -1,14 +1,15 @@
-# aria2v
+# fluxdl
 
-[![docs](https://img.shields.io/badge/docs-aria2v.dev-blue)](https://metif12.github.io/aria2v/)
+[![docs](https://img.shields.io/badge/docs-fluxdl.dev-blue)](https://metif12.github.io/fluxdl/)
 [![V 0.5.2](https://img.shields.io/badge/V-0.5.2-7f8caa.svg)](https://vlang.io)
 [![license: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-A download engine in pure V. Not a fork of aria2 — the transfer manager Fluxget
-needs, written from scratch, with the same JSON-RPC surface so the swap is
-reversible.
+**fluxdl** is a pure-V download engine for Fluxget: multi-connection HTTP(S),
+resumable transfers, aria2-format session files, and the same JSON-RPC surface
+Fluxget already calls. It is the transfer manager, not a fork of aria2 — so the
+cut-over is a host-and-port change, and reverting is the same change backwards.
 
-**[Project site and documentation](https://metif12.github.io/aria2v/)** ·
+**[Project site and documentation](https://metif12.github.io/fluxdl/)** ·
 [Quick start](docs/CLI.md) · [Architecture](docs/ARCHITECTURE.md) ·
 [RPC reference](docs/RPC.md) · [vpm package](docs/PACKAGE.md) ·
 [Roadmap](ROADMAP.md)
@@ -16,17 +17,17 @@ reversible.
 ## Install as a V package
 
 ```powershell
-v install metif12.aria2v                            # from vpm once registered
-v install --git https://github.com/metif12/aria2v   # from source today
+v install metif12.fluxdl                            # from vpm once registered
+v install --git https://github.com/metif12/fluxdl   # from source today
 ```
 
 Add it to a project's `v.mod` with `v install` from inside that project. VPM
-packages are imported under their full name (`metif12.aria2v.plan`); a git
-install of this repo uses the short prefix (`aria2v.plan`):
+packages are imported under their full name (`metif12.fluxdl.plan`); a git
+install of this repo uses the short prefix (`fluxdl.plan`):
 
 ```v
-import metif12.aria2v.plan
-import metif12.aria2v.link
+import metif12.fluxdl.plan
+import metif12.fluxdl.link
 
 fn main() {
 	segs := plan.plan(1048576, 4, 0)
@@ -73,7 +74,7 @@ it is scoped to those:
 
 What it reads is what `aria2c 1.37.0` was measured to write on this machine: a
 multi-mirror `addUri` comes back from `aria2.getUris` as **five rows for two
-URLs**, because aria2 expands the set internally. aria2v reports one row per
+URLs**, because aria2 expands the set internally. fluxdl reports one row per
 source instead; that difference is deliberate and is called out in
 [the compatibility note](docs/compat/fluxget.md).
 
@@ -94,18 +95,18 @@ Honest, because a list like this is the only thing that makes the list useful.
 ## Install and use
 
 ```powershell
-git clone https://github.com/metif12/aria2v.git
-cd aria2v
-v build -o aria2v.exe .          # V 0.5.2
+git clone https://github.com/metif12/fluxdl.git
+cd fluxdl
+v build -o fluxdl.exe .          # V 0.5.2
 
 # See what a 100 MiB download would fetch in eight ranges:
-./aria2v.exe plan https://example.com/big.bin 104857600 8
+./fluxdl.exe plan https://example.com/big.bin 104857600 8
 
 # Fetch it for real:
-./aria2v.exe download https://example.com/big.bin -x 8 -d D:/Downloads
+./fluxdl.exe download https://example.com/big.bin -x 8 -d D:/Downloads
 
 # Run Fluxget's JSON-RPC surface on loopback:
-./aria2v.exe serve --addr 127.0.0.1:9009 --secret change-me --session D:/Downloads/aria2v.session
+./fluxdl.exe serve --addr 127.0.0.1:9009 --secret change-me --session D:/Downloads/fluxdl.session
 ```
 
 Full CLI reference: [docs/CLI.md](docs/CLI.md).

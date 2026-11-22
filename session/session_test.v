@@ -3,7 +3,7 @@ module session
 import os
 
 fn scratch(name string) string {
-	dir := os.join_path(os.temp_dir(), 'aria2v-session-test')
+	dir := os.join_path(os.temp_dir(), 'fluxdl-session-test')
 	os.mkdir_all(dir) or { panic('cannot make the scratch directory: ' + err.msg()) }
 	p := os.join_path(dir, name)
 	os.rm(p) or {}
@@ -163,14 +163,14 @@ fn test_saving_twice_replaces_rather_than_appends() {
 
 // Saving into a directory that does not exist is the first-run case.
 fn test_saving_creates_the_directory_it_needs() {
-	p := os.join_path(os.temp_dir(), 'aria2v-session-test', 'nested', 'deeper', 'x.session')
+	p := os.join_path(os.temp_dir(), 'fluxdl-session-test', 'nested', 'deeper', 'x.session')
 	os.rm(os.dir(p)) or {}
 	save(p, [one('https://a/f.bin', {})]) or { assert false, err.msg() }
 	assert os.exists(p), 'the directory was not created'
 }
 
 fn test_a_missing_file_is_an_empty_queue_not_an_error() {
-	got, skipped := load(os.join_path(os.temp_dir(), 'aria2v-session-test', 'absent.session'))
+	got, skipped := load(os.join_path(os.temp_dir(), 'fluxdl-session-test', 'absent.session'))
 	assert got.len == 0, '${got.len}'
 	assert skipped == 0, '${skipped}'
 }

@@ -1,6 +1,6 @@
-# aria2v as a V package
+# fluxdl as a V package
 
-`aria2v` is a V package with five public modules and no third-party dependencies.
+`fluxdl` is a V package with five public modules and no third-party dependencies.
 It builds with V 0.5.2.
 
 ## Install
@@ -8,13 +8,13 @@ It builds with V 0.5.2.
 From vpm (after registration):
 
 ```powershell
-v install metif12.aria2v
+v install metif12.fluxdl
 ```
 
 From git, today:
 
 ```powershell
-v install --git https://github.com/metif12/aria2v
+v install --git https://github.com/metif12/fluxdl
 ```
 
 `v install` run inside another project also records the dependency in that
@@ -28,8 +28,8 @@ install uses the `v.mod` name only:
 
 | Installed as | Import prefix | Example |
 |---|---|---|
-| `metif12.aria2v` (vpm) | `metif12.aria2v` | `import metif12.aria2v.plan` |
-| `aria2v` (`--git`) | `aria2v` | `import aria2v.plan` |
+| `metif12.fluxdl` (vpm) | `metif12.fluxdl` | `import metif12.fluxdl.plan` |
+| `fluxdl` (`--git`) | `fluxdl` | `import fluxdl.plan` |
 
 In either case the module name you write code against is just the last
 component (`plan`, `link`, …), because V flattens module prefixes.
@@ -57,11 +57,11 @@ A complete library example is in [`examples/library.v`](../examples/library.v).
 3. Commit and push to `main`; `repo_url` and `repo_branch` in `v.mod` point
    there.
 4. Register the package once at <https://vpm.vlang.io/new> with GitHub login.
-   The registry combines the account and repo into `metif12.aria2v`; the entry
+   The registry combines the account and repo into `metif12.fluxdl`; the entry
    cannot be edited after submission, so check the name and URL first.
 5. Tag the repository with `vlang` and `vlang-package` for discoverability.
 
-The package name in `v.mod` stays `aria2v` — the publisher prefix is added by
+The package name in `v.mod` stays `fluxdl` — the publisher prefix is added by
 vpm, not by the module name.
 
 ## What this package is not

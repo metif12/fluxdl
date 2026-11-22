@@ -1,14 +1,14 @@
-// A small consumer of the aria2v package.
+// A small consumer of the fluxdl package.
 //
 // Run from the repo root with the package on the module path:
 //   v run examples/library.v
 //
 // A project that installed the package with vpm would import
-// `metif12.aria2v.plan` and `metif12.aria2v.link` instead.
+// `metif12.fluxdl.plan` and `metif12.fluxdl.link` instead.
 module main
 
-import aria2v.link
-import aria2v.plan
+import fluxdl.link
+import fluxdl.plan
 
 fn main() {
 	url := 'https://example.com/archive.bin?token=abc'

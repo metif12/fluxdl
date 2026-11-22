@@ -1,4 +1,4 @@
-// main.v - the aria2v CLI.
+// main.v - the fluxdl CLI.
 //
 // Two kinds of command live here. `plan`, `session` and `suggest` are pure and
 // exist to make the engine's arithmetic inspectable without a network.
@@ -8,33 +8,33 @@
 module main
 
 import os
-import aria2v.link
-import aria2v.plan
-import aria2v.rpc
-import aria2v.session
-import aria2v.transfer
+import fluxdl.link
+import fluxdl.plan
+import fluxdl.rpc
+import fluxdl.session
+import fluxdl.transfer
 
 fn usage() {
-	print('aria2v ${rpc.version} - a download engine in pure V
+	print('fluxdl ${rpc.version} - a download engine in pure V
 
-  aria2v plan <url> <bytes> [connections] [min-segment]
+  fluxdl plan <url> <bytes> [connections] [min-segment]
       Print the byte ranges a download of <bytes> would fetch.
 
-  aria2v session <path>
+  fluxdl session <path>
       Read a session file and print what came back, and how many lines were
       lost to corruption.
 
-  aria2v suggest <url>
+  fluxdl suggest <url>
       Print the folder a URL implies.
 
-  aria2v download <url> [-d dir] [-o name] [-x connections] [--min-segment bytes]
+  fluxdl download <url> [-d dir] [-o name] [-x connections] [--min-segment bytes]
       Fetch a URL with N ranges, writing one file. Resumes from the bytes
       already on disk.
 
-  aria2v serve [--addr 127.0.0.1:9009] [--secret token] [--session path]
+  fluxdl serve [--addr 127.0.0.1:9009] [--secret token] [--session path]
       Run the loopback JSON-RPC server that Fluxget talks to.
 
-  aria2v --version
+  fluxdl --version
 ')
 }
 
@@ -72,7 +72,7 @@ fn cmd_plan(args []string) {
 	min_segment := if args.len > 3 { args[3].i64() } else { 0 }
 
 	l := link.parse(url) or {
-		eprintln('aria2v: ${err.msg()}')
+		eprintln('fluxdl: ${err.msg()}')
 		exit(1)
 	}
 	println('url:      ${l.raw}')
@@ -121,7 +121,7 @@ fn cmd_suggest(args []string) {
 }
 
 // cmd_download is the engine without the daemon: one URL, one file, N ranges.
-// It is the same path `aria2v serve` takes, minus the JSON-RPC envelope.
+// It is the same path `fluxdl serve` takes, minus the JSON-RPC envelope.
 fn cmd_download(args []string) {
 	mut url := ''
 	mut dir := os.getenv('ARIA2V_DIR')
@@ -173,7 +173,7 @@ fn cmd_download(args []string) {
 	}
 
 	l := link.parse(url) or {
-		eprintln('aria2v: ${err.msg()}')
+		eprintln('fluxdl: ${err.msg()}')
 		exit(1)
 	}
 	if out == '' {
@@ -183,7 +183,7 @@ fn cmd_download(args []string) {
 
 	mut fetcher := &transfer.HttpFetcher{}
 	meta := fetcher.head(url) or {
-		eprintln('aria2v: ${err.msg()}')
+		eprintln('fluxdl: ${err.msg()}')
 		exit(1)
 	}
 	done := if os.exists(path) { os.file_size(path) } else { i64(0) }
@@ -196,7 +196,7 @@ fn cmd_download(args []string) {
 		connections: connections
 		min_segment: min_segment
 	}, fetcher, mut progress) or {
-		eprintln('aria2v: ${err.msg()}')
+		eprintln('fluxdl: ${err.msg()}')
 		exit(1)
 	}
 	println('${path}: ${progress.value} of ${meta.length} bytes (${n} fetched this run)')
@@ -207,7 +207,7 @@ fn cmd_serve(args []string) {
 	mut secret := os.getenv('ARIA2V_SECRET')
 	mut session_path := os.getenv('ARIA2V_SESSION')
 	if session_path == '' {
-		session_path = os.join_path(os.temp_dir(), 'aria2v.session')
+		session_path = os.join_path(os.temp_dir(), 'fluxdl.session')
 	}
 	mut i := 0
 	for i < args.len {
@@ -232,12 +232,12 @@ fn cmd_serve(args []string) {
 				}
 			}
 			else {
-				eprintln('aria2v: unknown serve option ${a}')
+				eprintln('fluxdl: unknown serve option ${a}')
 				exit(1)
 			}
 		}
 		i++
 	}
-	println('aria2v ${rpc.version} listening on ${addr} (JSON-RPC POST /jsonrpc)')
+	println('fluxdl ${rpc.version} listening on ${addr} (JSON-RPC POST /jsonrpc)')
 	rpc.serve(addr, secret, session_path)
 }

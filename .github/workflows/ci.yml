@@ -23,8 +23,8 @@ jobs:
       - name: Test
         run: v test .
       - name: Build CLI
-        run: v build -o aria2v .
+        run: v build -o fluxdl .
       - name: Smoke-check CLI
-        run: ./aria2v --version
+        run: ./fluxdl --version
       - name: Library example
         run: v run examples/library.v

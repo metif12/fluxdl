@@ -1,6 +1,6 @@
 module transfer
 
-import aria2v.plan
+import fluxdl.plan
 import os
 
 // A fetcher that writes deterministic bytes at the segment's offset. It is the
@@ -36,7 +36,7 @@ pub fn (f FakeFetcher) fetch(url string, seg plan.Segment, path string) !i64 {
 }
 
 fn scratch(name string) string {
-	dir := os.join_path(os.temp_dir(), 'aria2v-transfer-test')
+	dir := os.join_path(os.temp_dir(), 'fluxdl-transfer-test')
 	os.mkdir_all(dir) or {}
 	p := os.join_path(dir, name)
 	os.rm(p) or {}

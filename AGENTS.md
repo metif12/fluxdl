@@ -1,4 +1,4 @@
-# AGENTS.md — how to work in aria2v
+# AGENTS.md — how to work in fluxdl
 
 Rules that differ from, or add to, Fluxget's own AGENTS.md. Where the two
 disagree, the stricter one wins: this code will run in Fluxget's process space.

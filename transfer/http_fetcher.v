@@ -6,7 +6,7 @@
 // multi-connection download needs N independent cursors into one file.
 module transfer
 
-import aria2v.plan
+import fluxdl.plan
 import net.http
 import os
 

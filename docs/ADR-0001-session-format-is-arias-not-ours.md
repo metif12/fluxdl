@@ -31,7 +31,7 @@ same flat shape.
 ## Why
 
 1. **The cut-over has to be reversible.** A file `aria2c` wrote must be a file
-   aria2v reads, and the other way round. That is what makes switching engines a
+   fluxdl reads, and the other way round. That is what makes switching engines a
    setting instead of a migration, and a migration nobody can reverse is a
    migration nobody will approve.
 2. **An empty queue is recoverable; a half-written one is not.** The atomic-write

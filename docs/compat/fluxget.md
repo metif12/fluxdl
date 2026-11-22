@@ -60,7 +60,7 @@ docs, and they are the ones a reimplementation gets wrong.
 
 ## What this list is not
 
-It is **not** a promise that aria2v will implement all of it. The roadmap decides
+It is **not** a promise that fluxdl will implement all of it. The roadmap decides
 that; this document decides what "done" means when it gets there. Anything not on
 this list is not needed by Fluxget, however much aria2 has it.
 

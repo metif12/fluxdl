@@ -1,4 +1,4 @@
-# aria2v roadmap
+# fluxdl roadmap
 
 The milestones, what each one buys, and what is **not** in it. Ordered by "what
 makes this usable", not by what is fun to write.
@@ -44,7 +44,7 @@ shape, so the swap is a host/port change.
 |---|---|
 | **Adds** | `addUri`, `tellStatus`, `tellActive`, `tellWaiting`, `tellStopped`, `pause`, `unpause`, `pauseAll`, `unpauseAll`, `remove`, `removeDownloadResult`, `getFiles`, `getServers`, `getUris`, `getOption`, `changeOption`, `getPeers`, `getGlobalStat`, `getVersion`, `getGlobalOption`, `changeGlobalOption`, `saveSession`, `shutdown`, `system.multicall`, `system.listMethods` |
 | **Proves** | string-valued numbers; the leading `token:` argument is stripped before dispatch and not repeated inside multicall; a failed download carries `errorCode`/`errorMessage` and never `error`; `saveSession` writes an aria2-format file |
-| **Still absent** | BitTorrent, and the one deliberate wire difference: aria2 expands two mirrors into five `getUris` rows, aria2v returns one row per source |
+| **Still absent** | BitTorrent, and the one deliberate wire difference: aria2 expands two mirrors into five `getUris` rows, fluxdl returns one row per source |
 
 **Why this order:** it makes the engine replaceable *before* it is good. The
 furthest an incomplete engine can get is "runs the app's own contract", and
@@ -63,10 +63,10 @@ behaviour from Phase 4, and the notice queue.
 
 | | |
 |---|---|
-| **Proves** | Fluxget's Phase 1–4 suites pass against aria2v without modification |
+| **Proves** | Fluxget's Phase 1–4 suites pass against fluxdl without modification |
 | **Still absent** | BitTorrent, Metalink, FTP |
 
-This is the milestone where aria2v earns its keep: the same tests that prove
+This is the milestone where fluxdl earns its keep: the same tests that prove
 Fluxget works against `aria2c` now prove it works against something this repo
 controls.
 
