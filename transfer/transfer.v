@@ -97,13 +97,26 @@ pub fn download_with_meta(url string, meta Meta, known i64, done i64, path strin
 		return 0
 	}
 
-	// Create and size the file BEFORE any worker starts. N workers racing to
-	// create the same path would each truncate it, and the last truncate wins
-	// over bytes already written by the others.
+	// Create the file once before any worker starts. N workers racing to
+	// create the same path would each truncate it. Writes at an offset extend
+	// the file, so only shrink a stale file that is longer than the plan:
+	// padding a failed download with zeros would make it look complete.
 	if !os.exists(path) {
 		os.create(path)!
 	}
-	os.truncate(path, u64(total))!
+	if os.file_size(path) > total {
+		os.truncate(path, u64(total))!
+	}
+
+	// One segment needs no goroutine, channel or wait group. That is the
+	// common case for small files and for servers that ignore Range.
+	if segs.len == 1 {
+		n := fetcher.fetch(url, segs[0], path) or {
+			return error('transfer: 1 segment(s) failed: ${err.msg()}')
+		}
+		progress.add(n)
+		return n
+	}
 
 	ch := chan Result{cap: segs.len}
 	mut wg := sync.new_waitgroup()

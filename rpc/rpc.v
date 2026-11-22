@@ -219,22 +219,30 @@ fn null_id() json2.Any {
 
 // ---- the wire ------------------------------------------------------------
 
+// rpc_request is the JSON-RPC envelope. Decoding straight into a struct avoids
+// building a map of Any values for every request, which is the cheapest win
+// available on the poll path. Params stay dynamic; they differ per method.
+struct RpcRequest {
+	method string
+	params []json2.Any = []
+	id     json2.Any   = json2.Any(json2.Null{})
+}
+
 // handle_payload answers one JSON-RPC request body.
 //
 // A leading `token:<secret>` is stripped after checking it, because aria2
 // does NOT repeat it inside system.multicall's inner calls. Every numeric
 // field in a result is a string, including in nested objects.
 pub fn (mut m Manager) handle_payload(raw string) string {
-	decoded := json2.decode[json2.Any](raw) or {
+	req := json2.decode[RpcRequest](raw) or {
 		return fail(null_id(), -32700, 'Parse error')
 	}
-	obj := any_map(decoded)
-	method := any_str(field(obj, 'method'))
+	method := req.method
 	if method == '' {
 		return fail(null_id(), -32600, 'Invalid Request')
 	}
-	id := field(obj, 'id')
-	mut params := any_arr(field(obj, 'params'))
+	id := req.id
+	mut params := req.params.clone()
 
 	if m.secret != '' {
 		provided := if params.len > 0 { any_str(params[0]) } else { '' }

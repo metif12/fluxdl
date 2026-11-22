@@ -137,3 +137,29 @@ fn test_download_with_meta_does_not_probe_a_second_time() {
 	assert n == 1024, 'got ${n}'
 	assert heads == 1, 'the transfer probed a second time: ${heads}'
 }
+
+fn test_a_single_segment_transfer_uses_the_fast_path() {
+	p := scratch('single.bin')
+	mut f := &FakeFetcher{}
+	mut progress := &Progress{}
+	n := download('https://example.test/single.bin', 1024, 0, p, Options{ connections: 1 }, f, mut progress) or {
+		assert false, err.msg()
+		return
+	}
+	assert n == 1024, 'got ${n}'
+	assert os.file_size(p) == 1024, 'file is ${os.file_size(p)} bytes'
+}
+
+// A failed single-segment transfer must not leave a full-size file: the next
+// run would read its size as "already complete" and never fetch the bytes.
+fn test_a_failed_transfer_does_not_leave_a_full_size_file() {
+	p := scratch('failed-size.bin')
+	mut f := &FakeFetcher{ fail_first: true }
+	mut progress := &Progress{}
+	download('https://example.test/fsize.bin', 1024, 0, p, Options{ connections: 1 }, f, mut progress) or {
+		assert err.msg().contains('1 segment(s) failed'), err.msg()
+		assert os.file_size(p) < 1024, 'failed transfer left a ${os.file_size(p)}-byte file'
+		return
+	}
+	assert false, 'a failed segment must not look like success'
+}

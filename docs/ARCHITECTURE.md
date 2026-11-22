@@ -72,14 +72,19 @@ Fluxget actually calls. Every numeric field on the wire is a string, and the
 leading `token:` argument is stripped before dispatch — including for
 `system.multicall`, whose inner calls do not repeat it.
 
-Two details keep that state machine cheap under a poll-heavy client:
+Three details keep the hot paths cheap:
 
 - The probe happens once. `aria2.addUri` gets the length, and the worker uses
   `transfer.download_with_meta` so the transfer does not probe a second time.
 - A tellStatus row is encoded once per `Download.version` and cached. A state
   change bumps the version, so the next poll re-encodes; unchanged polls are
-  string assembly only. The poll benchmark (5,000 `tellActive` calls over 100
-  rows) went from 14.6 s to 0.74 s.
+  string assembly only. The JSON-RPC envelope is decoded straight into a struct
+  instead of a map of dynamic values. The poll benchmark (5,000 `tellActive`
+  calls over 100 rows) went from 14.6 s to 0.71 s.
+- A one-segment transfer skips the goroutine, channel and wait group entirely;
+  the same benchmark for 5,000 small downloads went from 2.52 s to 0.16 s.
+  Output files are only ever shrunk when stale, never padded with zeros, so a
+  failed transfer cannot leave a full-size file that looks complete.
 
 See [RPC.md](RPC.md) and [compat/fluxget.md](compat/fluxget.md).
 
