@@ -118,19 +118,20 @@ pub fn download_with_meta(url string, meta Meta, known i64, done i64, path strin
 		return n
 	}
 
-	ch := chan Result{cap: segs.len}
+	// Each worker owns exactly one slot of `results`, so no lock or channel is
+	// needed to collect them. The wait group is the only synchronisation.
+	mut results := []Result{len: segs.len}
 	mut wg := sync.new_waitgroup()
-	for seg in segs {
+	for i, seg in segs {
 		wg.add(1)
-		go fetch_one(url, path, seg, fetcher, ch, wg)
+		go fetch_one_at(url, path, seg, i, fetcher, mut results, wg)
 	}
 	wg.wait()
 
 	mut written := i64(0)
 	mut failures := 0
 	mut first_error := ''
-	for _ in segs {
-		r := <-ch
+	for r in results {
 		if r.err != '' {
 			failures++
 			if first_error == '' {
@@ -147,13 +148,13 @@ pub fn download_with_meta(url string, meta Meta, known i64, done i64, path strin
 	return written
 }
 
-fn fetch_one(url string, path string, seg plan.Segment, fetcher &Fetcher, ch chan Result, wg &sync.WaitGroup) {
+fn fetch_one_at(url string, path string, seg plan.Segment, index int, fetcher &Fetcher, mut results []Result, wg &sync.WaitGroup) {
 	defer {
 		wg.done()
 	}
 	n := fetcher.fetch(url, seg, path) or {
-		ch <- Result{ err: err.msg() }
+		results[index] = Result{ err: err.msg() }
 		return
 	}
-	ch <- Result{ bytes: n }
+	results[index] = Result{ bytes: n }
 }

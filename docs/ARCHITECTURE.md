@@ -83,10 +83,12 @@ Three details keep the hot paths cheap:
   The cached poll benchmark (5,000 `tellActive` calls over 100 rows) went from
   14.6 s to ~0.77 s; the re-encoding path (500 polls that change every row)
   went from 1.65 s to ~0.7 s.
-- A one-segment transfer skips the goroutine, channel and wait group entirely;
-  the same benchmark for 5,000 small downloads went from 2.52 s to 0.16 s.
-  Output files are only ever shrunk when stale, never padded with zeros, so a
-  failed transfer cannot leave a full-size file that looks complete.
+- A one-segment transfer skips the goroutine and wait group entirely; the
+  benchmark for 5,000 small downloads went from 2.52 s to 0.16 s. Multi-segment
+  transfers write into preallocated result slots instead of a channel (5,000
+  four-segment transfers: 1.92 s to 1.62 s). Output files are only ever shrunk
+  when stale, never padded with zeros, so a failed transfer cannot leave a
+  full-size file that looks complete.
 
 See [RPC.md](RPC.md) and [compat/fluxget.md](compat/fluxget.md).
 
