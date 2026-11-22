@@ -106,6 +106,7 @@ h1 {
 }
 .pill.done { color: var(--accent); border-color: var(--accent-dim); }
 .pill.next { color: var(--amber); border-color: #6b552f; }
+.pill.wip { color: #8fc7ff; border-color: #33526e; }
 
 /* sections */
 section.block { padding: 84px 0; border-bottom: 1px solid var(--line-soft); }

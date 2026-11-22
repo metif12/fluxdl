@@ -7,6 +7,24 @@ The rule this roadmap follows: every line that says *done* has a test that would
 have caught it being wrong. The two columns that matter are **Proves** and
 **Still absent** — the second is the one that keeps the first honest.
 
+## Current status
+
+| Milestone | State |
+|---|---|
+| M0 · manager brain | ✅ DONE |
+| M1 · HTTP transfer | ✅ DONE |
+| M2 · RPC cut-over | ✅ DONE |
+| M3 · hardening and engine parity | 🔄 IN PROGRESS |
+| M4 · FTP | not started |
+| M5 · BitTorrent | not started |
+| M6 · Metalink, checksums | not started |
+
+M3 currently covers packaging as a vpm package, the GitHub Page, cancellation
+tokens, a bounded queue, digit validation of untrusted numbers, constant-time
+token comparison and JSON-RPC notification handling. Fluxget's Phase 1–4 suites
+have not been run against this server yet; that is the cut-over test in
+Fluxget's tree, not a claim made here.
+
 ## Milestone 0 — the manager's brain ✅ DONE
 
 `plan`, `link`, `session` and the CLI that drives them.
@@ -31,9 +49,10 @@ All pure, no sockets.
 
 **The trap that was expected:** `net.http.download_file_with_progress` gives no
 control over the *connection*, so N connections means N calls, and each one must
-open its own file handle at its own offset. The file is now created and sized
-once before the workers start — N workers racing to create it would each
-truncate it, and the last truncate would win over bytes already written.
+open its own file handle at its own offset. The file is now created once before
+the workers start, and only shrunk when a stale copy is longer than the plan.
+Writes at an offset extend a short file; padding a failed transfer with zeros
+would leave a full-size file that the CLI reports as complete.
 
 ## Milestone 2 — the RPC surface and the cut-over ✅ DONE
 
@@ -56,19 +75,21 @@ been run against this server in this repo. That is the cut-over test and it
 belongs in Fluxget's tree, where the fake is swapped for us. The list above is
 what makes that test possible, not a claim that it has passed.
 
-## Milestone 3 — the engine Fluxget already has, in V ← NEXT
+## Milestone 3 — hardening and engine parity 🔄 IN PROGRESS
 
 Supervision (restart, backoff, readiness), the session round trip, the mirror set
-behaviour from Phase 4, and the notice queue.
+behaviour from Phase 4, and the notice queue. Alongside those, this milestone
+covers the work that makes fluxdl safe to publish and to run under Fluxget.
 
 | | |
 |---|---|
-| **Proves** | Fluxget's Phase 1–4 suites pass against fluxdl without modification |
-| **Still absent** | BitTorrent, Metalink, FTP |
+| **Adds** | vpm package with public modules; GitHub Page; cancellation tokens checked between segments; a bounded queue (10,000 rows); digit validation of CLI, RPC-option and HTTP length inputs; constant-time token comparison; notification handling; a user-owned default session path |
+| **Proves** | pause and remove signal a worker's token and a removed row is never recreated; `addUri` past the cap returns an error; 72 tests across six test files; full and resumed 1 MiB downloads are byte-identical |
+| **Still absent** | session restore on daemon startup, restart/backoff/readiness supervision, mirror liveness probing, the notice queue, BitTorrent, Metalink, FTP |
 
 This is the milestone where fluxdl earns its keep: the same tests that prove
-Fluxget works against `aria2c` now prove it works against something this repo
-controls.
+Fluxget works against `aria2c` must prove it works against something this repo
+controls. That run has not happened yet.
 
 ## Milestone 4 — FTP
 

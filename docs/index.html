@@ -14,10 +14,11 @@
 <body>
   <header class="site-header">
     <div class="wrap">
-      <a class="brand" href="#top"><span class="mark">a2</span> fluxdl</a>
+      <a class="brand" href="#top"><span class="mark">fd</span> fluxdl</a>
       <nav class="site-nav" aria-label="Main">
         <a href="#features">What it does</a>
         <a href="#how">How it works</a>
+        <a href="#roadmap">Roadmap</a>
         <a href="#start">Quick start</a>
         <a href="https://github.com/metif12/fluxdl" rel="noopener">GitHub</a>
       </nav>
@@ -43,7 +44,7 @@
           <span class="pill done">M0 · manager brain — done</span>
           <span class="pill done">M1 · HTTP transfer — done</span>
           <span class="pill done">M2 · RPC cut-over — done</span>
-          <span class="pill next">M3 · engine parity — next</span>
+          <span class="pill wip">M3 · hardening — in progress</span>
         </div>
       </section>
 
@@ -88,16 +89,53 @@
         <div class="flow">
           <div class="step"><span class="num">01</span><h3>Probe</h3><p>Ask for one byte. Learn the total length and whether ranges are honoured.</p></div>
           <div class="step"><span class="num">02</span><h3>Plan</h3><p>Subtract the on-disk prefix. Split the remainder into even, inclusive ranges.</p></div>
-          <div class="step"><span class="num">03</span><h3>Create once</h3><p>Size the output file before workers start, so nobody truncates another's bytes.</p></div>
+          <div class="step"><span class="num">03</span><h3>Create once</h3><p>Open the output file before workers start; only shrink it if a stale copy is too long.</p></div>
           <div class="step"><span class="num">04</span><h3>Fetch</h3><p>One streaming downloader per range, each writing at its own offset.</p></div>
-          <div class="step"><span class="num">05</span><h3>Account</h3><p>Collect results over a channel; a failed segment fails the whole download.</p></div>
+          <div class="step"><span class="num">05</span><h3>Account</h3><p>Each worker owns one result slot; cancellation is checked between segments.</p></div>
+        </div>
+      </section>
+
+      <section class="block reveal" id="roadmap">
+        <div class="section-head">
+          <h2>Roadmap</h2>
+          <p>Ordered by what makes the engine usable. A milestone is done only when a test would have caught it being wrong.</p>
+        </div>
+        <div class="grid">
+          <article class="card">
+            <h3><span class="pill done">Done</span> M0 · manager brain</h3>
+            <p>Byte-range planning, resume, URL/name derivation and the aria2-format session file. Pure, no sockets.</p>
+          </article>
+          <article class="card">
+            <h3><span class="pill done">Done</span> M1 · HTTP transfer</h3>
+            <p>Multi-connection HTTP(S), one-byte Range probe, per-download options and the <code>download</code> CLI.</p>
+          </article>
+          <article class="card">
+            <h3><span class="pill done">Done</span> M2 · RPC cut-over</h3>
+            <p>The <code>aria2.*</code> subset Fluxget calls, on the same loopback JSON-RPC shape. Reversible by host and port.</p>
+          </article>
+          <article class="card">
+            <h3><span class="pill wip">In progress</span> M3 · hardening</h3>
+            <p>vpm package, cancellation tokens, bounded queue, digit validation and constant-time token checks. Session restore, supervision and the notice queue are still absent.</p>
+          </article>
+          <article class="card">
+            <h3><span class="pill">Later</span> M4 · FTP</h3>
+            <p><code>net.ftp</code> exists; the smallest missing protocol and a test of whether the architecture generalises.</p>
+          </article>
+          <article class="card">
+            <h3><span class="pill">Later</span> M5 · BitTorrent</h3>
+            <p>The 80%: swarm, peers, trackers, DHT/PEX, piece selection. Whether to accept the security surface is an open question.</p>
+          </article>
+          <article class="card">
+            <h3><span class="pill">Later</span> M6 · Metalink, checksums</h3>
+            <p>The last protocols plus <code>md5</code>/<code>sha1</code>/<code>sha256</code> with a decided mismatch behaviour.</p>
+          </article>
         </div>
       </section>
 
       <section class="block reveal" id="start">
         <div class="section-head">
           <h2>Quick start</h2>
-          <p>V 0.5.2. <code>v fmt</code> is law. Tests are network-free — 62 of them across five module test files.</p>
+          <p>V 0.5.2. <code>v fmt</code> is law. Tests are network-free — 72 of them across six module test files.</p>
         </div>
         <div class="code">
           <div class="code-bar"><span>PowerShell</span><button class="copy" type="button" data-copy="body">Copy</button></div>
