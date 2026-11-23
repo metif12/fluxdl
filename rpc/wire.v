@@ -64,7 +64,7 @@ pub fn (mut m Manager) handle_payload(raw string) string {
 		params
 	}
 
-	cacheable := readonly_method(method)
+	cacheable := m.is_read_only(method)
 	// The cache key omits the leading token argument: the secret must not be
 	// retained as a map key for the manager's whole lifetime.
 	cache_key := if params.len > 0 && any_str(params[0]).starts_with('token:') {

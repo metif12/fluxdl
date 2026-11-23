@@ -72,6 +72,9 @@ pub mut:
 	secret       string
 	fetcher      &transfer.Fetcher
 	registry     &transports.Registry
+	// read_only is built once from method_specs so every request gets an O(1)
+	// lookup instead of allocating the whole method table.
+	read_only    map[string]bool
 	status_cache map[string]StatusCache
 	row_lists    map[string]RowsCache
 	responses    map[string]ResponseCache
@@ -99,6 +102,10 @@ pub fn new_manager(secret string, session_path string) &Manager {
 		dir = os.join_path(os.home_dir(), 'Downloads')
 	}
 	fetcher := transfer.new_http_fetcher()
+	mut read_only := map[string]bool{}
+	for spec in method_specs() {
+		read_only[spec.name] = spec.read_only
+	}
 	mut opts := map[string]string{}
 	opts['dir'] = dir
 	opts['max-connection-per-server'] = '4'
@@ -116,6 +123,7 @@ pub fn new_manager(secret string, session_path string) &Manager {
 		secret:       secret
 		fetcher:      fetcher
 		registry:     transports.with_http(fetcher)
+		read_only:    read_only
 		status_cache: map[string]StatusCache{}
 		row_lists:    map[string]RowsCache{}
 		responses:    map[string]ResponseCache{}

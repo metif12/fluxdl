@@ -50,11 +50,11 @@ fn method_names() []string {
 	return out
 }
 
-fn readonly_method(method string) bool {
-	for spec in method_specs() {
-		if spec.name == method {
-			return spec.read_only
-		}
+// is_read_only is the O(1) lookup used on every request. The table is built
+// once in new_manager; method_specs() remains the single source of truth.
+fn (m &Manager) is_read_only(method string) bool {
+	if method in m.read_only {
+		return m.read_only[method] or { false }
 	}
 	return false
 }
