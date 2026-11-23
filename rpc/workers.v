@@ -36,7 +36,7 @@ fn (mut m Manager) add_torrent(meta &torrent.Torrent, opts map[string]string) !s
 	}
 	m.downloads[gid] = d
 	m.order << gid
-	m.cancels[gid] = &transfer.Cancel{}
+	m.cancels[gid] = transfer.new_cancel()
 	m.started_at[gid] = i64(time.sys_mono_now())
 	m.queue_version++
 	m.mu.unlock()
@@ -95,7 +95,7 @@ fn (mut m Manager) add(uris []string, opts map[string]string) !string {
 	}
 	m.downloads[gid] = d
 	m.order << gid
-	m.cancels[gid] = &transfer.Cancel{}
+	m.cancels[gid] = transfer.new_cancel()
 	m.started_at[gid] = i64(time.sys_mono_now())
 	m.queue_version++
 	m.mu.unlock()
@@ -116,7 +116,7 @@ fn (mut m Manager) run(gid string) {
 	mut retry_opt := ''
 	mut delay_opt := ''
 	mut checksum_opt := ''
-	mut cancel := &transfer.Cancel{}
+	mut cancel := transfer.new_cancel()
 	m.mu.lock()
 	if gid in m.downloads {
 		d := m.downloads[gid]
@@ -139,7 +139,7 @@ fn (mut m Manager) run(gid string) {
 		checksum_opt = d.options['checksum']
 	}
 	if gid in m.cancels {
-		cancel = m.cancels[gid] or { &transfer.Cancel{} }
+		cancel = m.cancels[gid] or { transfer.new_cancel() }
 	}
 	m.mu.unlock()
 	if cancel.is_stopped() || uris.len == 0 {

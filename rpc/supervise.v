@@ -54,7 +54,7 @@ fn (mut m Manager) restart_download(gid string) {
 	d.error_message = ''
 	d.version++
 	m.started_at[gid] = i64(time.sys_mono_now())
-	m.cancels[gid] = &transfer.Cancel{}
+	m.cancels[gid] = transfer.new_cancel()
 	m.queue_version++
 	m.mu.unlock()
 	m.notice('supervisor restarted ${gid}')
@@ -62,7 +62,7 @@ fn (mut m Manager) restart_download(gid string) {
 }
 
 fn cancels_or_new(m &Manager, gid string) &transfer.Cancel {
-	return m.cancels[gid] or { &transfer.Cancel{} }
+	return m.cancels[gid] or { transfer.new_cancel() }
 }
 
 pub fn (mut m Manager) is_ready() bool {

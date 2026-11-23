@@ -279,7 +279,7 @@ fn (mut m Manager) dispatch(method string, p []json2.Any) (string, int, string) 
 			m.queue_version++
 			m.downloads[gid] = d
 			if d.status == 'paused' && gid in m.cancels {
-				(m.cancels[gid] or { &transfer.Cancel{} }).stop()
+				(m.cancels[gid] or { transfer.new_cancel() }).stop()
 			}
 			return json2.encode(gid), 0, ''
 		}
@@ -296,7 +296,7 @@ fn (mut m Manager) dispatch(method string, p []json2.Any) (string, int, string) 
 					d.version++
 					m.downloads[gid] = d
 					if new_status == 'paused' && gid in m.cancels {
-						(m.cancels[gid] or { &transfer.Cancel{} }).stop()
+						(m.cancels[gid] or { transfer.new_cancel() }).stop()
 					}
 				}
 			}
@@ -318,7 +318,7 @@ fn (mut m Manager) dispatch(method string, p []json2.Any) (string, int, string) 
 			m.queue_version++
 			m.downloads[gid] = d
 			if gid in m.cancels {
-				(m.cancels[gid] or { &transfer.Cancel{} }).stop()
+				(m.cancels[gid] or { transfer.new_cancel() }).stop()
 			}
 			if method == 'aria2.removeDownloadResult' {
 				m.order = m.order.filter(|it| it != gid)

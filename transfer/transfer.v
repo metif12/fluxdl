@@ -11,6 +11,7 @@ module transfer
 import fluxdl.plan
 import os
 import sync
+import sync.stdatomic
 
 // Meta is what one short probe tells us about a URL before any real transfer.
 //
@@ -46,23 +47,23 @@ pub:
 // checks it between segments so a queued download can be abandoned.
 pub struct Cancel {
 mut:
-	mu      sync.Mutex
-	stopped bool
+	stopped stdatomic.AtomicVal[bool]
+}
+
+// new_cancel creates an unsignalled cancellation token.
+pub fn new_cancel() &Cancel {
+	return &Cancel{ stopped: stdatomic.new_atomic[bool](false) }
 }
 
 // stop records that the owner no longer wants this transfer to continue.
 pub fn (mut c Cancel) stop() {
-	c.mu.lock()
-	c.stopped = true
-	c.mu.unlock()
+	c.stopped.store(true)
 }
 
-// is_stopped reports whether stop() has been called.
+// is_stopped reports whether stop() has been called. It is lock-free: workers
+// check it between segments, and a mutex there would serialize every segment.
 pub fn (mut c Cancel) is_stopped() bool {
-	c.mu.lock()
-	v := c.stopped
-	c.mu.unlock()
-	return v
+	return c.stopped.load()
 }
 
 // Progress is a byte counter shared between the workers and the caller.
@@ -120,10 +121,7 @@ pub fn download_with_meta(url string, meta Meta, known i64, done i64, path strin
 	if segs.len == 0 {
 		return 0
 	}
-	cancelled := fn (c &Cancel) bool {
-		return c != unsafe { nil } && c.is_stopped()
-	}
-	if cancelled(opts.cancel) {
+	if cancel_requested(opts.cancel) {
 		return error('transfer: cancelled')
 	}
 
@@ -141,7 +139,7 @@ pub fn download_with_meta(url string, meta Meta, known i64, done i64, path strin
 	// One segment needs no goroutine, channel or wait group. That is the
 	// common case for small files and for servers that ignore Range.
 	if segs.len == 1 {
-		if cancelled(opts.cancel) {
+		if cancel_requested(opts.cancel) {
 			return error('transfer: cancelled')
 		}
 		n := fetcher.fetch(url, segs[0], path) or {
@@ -156,14 +154,14 @@ pub fn download_with_meta(url string, meta Meta, known i64, done i64, path strin
 	mut results := []Result{len: segs.len}
 	mut wg := sync.new_waitgroup()
 	for i, seg in segs {
-		if cancelled(opts.cancel) {
+		if cancel_requested(opts.cancel) {
 			break
 		}
 		wg.add(1)
 		go fetch_one_at(url, path, seg, i, fetcher, mut results, wg)
 	}
 	wg.wait()
-	if cancelled(opts.cancel) {
+	if cancel_requested(opts.cancel) {
 		return error('transfer: cancelled')
 	}
 
@@ -185,6 +183,10 @@ pub fn download_with_meta(url string, meta Meta, known i64, done i64, path strin
 		return error('transfer: ${failures} segment(s) failed: ${first_error}')
 	}
 	return written
+}
+
+fn cancel_requested(c &Cancel) bool {
+	return c != unsafe { nil } && c.is_stopped()
 }
 
 fn fetch_one_at(url string, path string, seg plan.Segment, index int, fetcher &Fetcher, mut results []Result, wg &sync.WaitGroup) {

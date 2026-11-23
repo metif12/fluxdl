@@ -107,7 +107,9 @@ pub fn (mut c Conn) next_message() !Message {
 			c.pex_peers << peer
 		}
 	}
-	return Message{ id: body[0], payload: body[1..].clone() }
+	// `body` is a fresh allocation owned by this message; share its storage
+	// instead of copying every piece block (up to 1 MiB each).
+	return Message{ id: body[0], payload: unsafe { body[1..] } }
 }
 
 fn (mut c Conn) send_message(id u8, payload []u8) ! {
