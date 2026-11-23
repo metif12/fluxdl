@@ -38,7 +38,9 @@ further is a guess the user has to undo.
 
 ## Live commands
 
-These use `net.http` and take the same path the RPC server takes.
+These open network connections and take the same path the RPC server takes.
+`download` also accepts `ftp://` and `sftp://` URLs; `torrent` and `seed` use
+the BitTorrent modules.
 
 ### `fluxdl download <url> [options]`
 
@@ -55,10 +57,12 @@ Fetches one URL into one file, resuming from the bytes already on disk.
 ./fluxdl.exe download https://example.com/big.iso -x 8 -d D:/Downloads
 ```
 
-The file is created and sized once before the workers start. Each worker opens
-its own handle at its own offset, so a resume writes only the remainder. If the
-server ignores `Range` and answers 200, the one-byte probe catches it and the
-download collapses to a single connection from byte zero.
+The output file is created once before the workers start and is only shrunk when
+a stale copy is longer than the plan. Each worker opens its own handle at its
+own offset, so a resume writes only the remainder and a failed transfer cannot
+leave a padded file that looks complete. If the server ignores `Range` and
+answers 200, the one-byte probe catches it and the download collapses to a
+single connection from byte zero.
 
 ### `fluxdl serve [options]`
 
@@ -69,13 +73,14 @@ secret is a bearer token, and this is not a public API.
 |---|---|---|
 | `--addr <host:port>` | listen address | `127.0.0.1:9009` |
 | `--secret <token>` | required leading `token:` argument | `FLUXDL_SECRET` |
-| `--session <path>` | aria2-format session file | `FLUXDL_SESSION`, else a temp path |
+| `--session <path>` | aria2-format session file | `FLUXDL_SESSION`, else `~/.fluxdl/session` |
 
 ```powershell
 ./fluxdl.exe serve --addr 127.0.0.1:9009 --secret change-me --session D:/Downloads/fluxdl.session
 ```
 
-A minimal readiness check:
+A minimal readiness check (the server also answers `GET /health` with 200 once
+the session is restored):
 
 ```powershell
 curl -s -X POST http://127.0.0.1:9009/jsonrpc `
@@ -87,9 +92,9 @@ See [RPC.md](RPC.md) for every method and its shape.
 
 ### `fluxdl torrent <path> [-d dir]`
 
-Downloads a `.torrent` using its HTTP tracker and the peer wire protocol. Pieces
-are chosen rarest-first and verified against the SHA1 hashes in the metainfo.
-DHT, PEX and magnet metadata exchange are not implemented.
+Downloads a `.torrent` — or a magnet URI with `xt=urn:btih:...` — using HTTP
+trackers, DHT fallback, PEX and the peer wire protocol. Pieces are chosen
+rarest-first and verified against the SHA1 hashes in the metainfo.
 
 ### `fluxdl seed <path> [-d dir] [-p port]`
 

@@ -17,7 +17,7 @@ cut-over is a host-and-port change, and reverting is the same change backwards.
 ## Install as a V package
 
 ```powershell
-v install metif12.fluxdl                            # from vpm once registered
+v install metif12.fluxdl                            # from vpm
 v install --git https://github.com/metif12/fluxdl   # from source today
 ```
 
@@ -40,7 +40,7 @@ fn main() {
 ```
 
 The public modules are `plan`, `link`, `session`, `transfer`, `rpc`, `util`,
-`checksum`, `metalink`, `ftp` and `torrent`. See
+`checksum`, `metalink`, `ftp`, `sftp` and `torrent`. See
 [docs/PACKAGE.md](docs/PACKAGE.md) for the API surface and publishing notes.
 
 ## Why this exists
@@ -72,7 +72,7 @@ it is scoped to those:
 | **Session save/restore in aria2's own format** | `--save-session` written flat, atomic by rename, and a reader that loses **one** line on corruption rather than the whole queue. |
 | **Mirror sets** | De-duplicated, ordered, and labelled by kind — a `.torrent` path is bytes, a magnet is its own protocol, a URL is HTTP. |
 | **Per-download options** | Where aria2's own option names apply. |
-| **The JSON-RPC subset Fluxget calls** | `addUri`, `tellStatus`, `tellActive/Waiting/Stopped`, pause/unpause, remove, `getFiles`, `getUris`, `getOption`, `changeOption`, global stat/options, `saveSession`, `shutdown`, `system.multicall`, `system.listMethods` — on the same loopback POST shape, with string-valued numbers and the leading `token:` argument. |
+| **The JSON-RPC subset Fluxget calls** | `addUri`, `tellStatus`, `tellActive/Waiting/Stopped`, pause/unpause, remove, `getFiles`, `getUris`, `getOption`, `changeOption`, global stat/options, `saveSession`, `shutdown`, `system.multicall`, `system.listMethods`, plus `addTorrent`, `addMagnet`, `addMetalink` and `getNotices` — on the same loopback POST shape, with string-valued numbers and the leading `token:` argument. |
 | **FTP** | An `ftp://` URL uses a `net.ftp`-backed fetcher. Whole-file only, because V's FTP client has no range REST. |
 | **BitTorrent core** | Bencode, `.torrent` metadata, HTTP trackers, the peer wire protocol, rarest-first piece selection and SHA1 verification of every piece. |
 | **Metalink and checksums** | Metalink 4 files and URLs, plus `md5`/`sha1`/`sha256` verification of a completed download. |
@@ -137,6 +137,8 @@ transfer/                 the engine: probe, concurrent fetch, byte accounting
   transfer.v              pure manager; the transport is injected
   http_fetcher.v          the HTTP transport
 ftp/                      an FTP transfer.Fetcher (whole file)
+sftp/                     an SFTP transfer.Fetcher via the system client
+util/                     shared digit/hex/secret validators
 checksum/                 md5/sha1/sha256 verification
 metalink/                 Metalink 4 files and URLs
 torrent/                  bencode, trackers, peer wire, SHA1 pieces
@@ -152,13 +154,14 @@ bugs are found without a network.
 ## Testing
 
 ```powershell
-v test .                  # 92 tests across twelve module test files
+v test .                  # 98 tests across twelve module test files
 v fmt -w .                # v fmt is law
 ```
 
-V 0.5.2 is required. Tests are network-free. The `download` and `serve`
-commands are the only paths that touch a socket, and both are exercised by hand
-or by Fluxget's own contract suite, not by `v test`.
+V 0.5.2 is required. Tests are network-free. Network paths live behind the
+`download`, `serve`, `torrent` and `seed` commands and the FTP/SFTP/BitTorrent
+modules; they are exercised by hand or by Fluxget's contract suite, not by
+`v test`.
 
 ## Network use
 

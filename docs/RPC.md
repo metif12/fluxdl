@@ -30,7 +30,7 @@ recreated by its worker.
 |---|---|---|
 | `aria2.addUri` | `[token,] uris, options?` | `gid` (16 chars) |
 | `aria2.addTorrent` | `[token,] path` | `gid` |
-| `aria2.addMagnet` | `[token,] uri` | error until metadata exchange exists |
+| `aria2.addMagnet` | `[token,] uri` | `gid`; metadata resolves via DHT or tracker peers |
 | `aria2.addMetalink` | `[token,] path` | array of `gid`s |
 | `aria2.tellStatus` | `gid` | status object |
 | `aria2.tellActive` | — | array of status objects with `status: "active"` |
@@ -42,8 +42,8 @@ recreated by its worker.
 | `aria2.removeDownloadResult` | `gid` | `gid` |
 | `aria2.getFiles` | `gid` | array with one file object |
 | `aria2.getUris` | `gid` | array of `{ uri, status }` rows |
-| `aria2.getServers` | `gid` | `[]` — no BitTorrent trackers |
-| `aria2.getPeers` | `gid` | `[]` — no BitTorrent peers |
+| `aria2.getServers` | `gid` | `[]` — tracker list not exposed by this subset |
+| `aria2.getPeers` | `gid` | `[]` — peer list not exposed by this subset |
 | `aria2.getOption` | `gid` | per-download option map |
 | `aria2.changeOption` | `gid, options` | `gid` |
 

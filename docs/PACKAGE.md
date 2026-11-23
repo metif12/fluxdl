@@ -1,11 +1,11 @@
 # fluxdl as a V package
 
-`fluxdl` is a V package with five public modules and no third-party dependencies.
+`fluxdl` is a V package with eleven public modules and no third-party dependencies.
 It builds with V 0.5.2.
 
 ## Install
 
-From vpm (after registration):
+From vpm:
 
 ```powershell
 v install metif12.fluxdl
@@ -43,12 +43,12 @@ component (`plan`, `link`, …), because V flattens module prefixes.
 | `session` | `Entry`, `encode`, `decode`, `save`, `load` | aria2-format queue files |
 | `transfer` | `Meta`, `Fetcher`, `Options`, `Progress`, `HttpFetcher`, `download`, `download_with_meta` | fetching ranges, with an injectable transport |
 | `rpc` | `Manager`, `new_manager`, `Handler`, `serve`, `version` | the loopback JSON-RPC surface Fluxget calls |
-| `util` | `all_digits`, `int_or`, `i64_or`, `secure_equal` | validating untrusted numbers and comparing secrets |
+| `util` | `all_digits`, `int_or`, `i64_or`, `decode_hex_pair`, `secure_equal` | validating untrusted numbers, hex escapes and secrets |
 | `checksum` | `hash_bytes`, `hash_file`, `verify_file` | md5/sha1/sha256 verification |
 | `metalink` | `MetalinkFile`, `parse` | Metalink 4 files, URLs and hashes |
 | `ftp` | `Fetcher`, `new_fetcher`, `parse_target` | whole-file FTP downloads |
 | `sftp` | `Fetcher`, `new_fetcher`, `parse_target` | whole-file SFTP downloads via the system client |
-| `torrent` | `Torrent`, `parse`, `parse_magnet`, `download`, `announce`, `handshake` | bencode, trackers, peer wire, SHA1 pieces |
+| `torrent` | `Torrent`, `parse`, `parse_magnet`, `download`, `resolve_magnet`, `seed`, `announce`, `handshake`, `new_dht` | bencode, trackers, DHT/PEX/magnets, peer wire, SHA1 pieces, seeding |
 
 `transfer.Fetcher` is the seam for callers that want to own the transport:
 implement `head` and `fetch`, then call `transfer.download` with your
@@ -72,6 +72,8 @@ vpm, not by the module name.
 
 ## What this package is not
 
-It is a library and a CLI, not a daemon supervisor. Fluxget still owns restart,
-backoff and readiness. BitTorrent, Metalink and checksums are not implemented;
-see [ROADMAP.md](../ROADMAP.md).
+It is a library and a CLI, not an OS-level service manager. Fluxget still owns
+process restart and deployment; HTTP readiness is exposed via
+`GET /health`. uTP and BitTorrent protocol encryption are non-goals. The
+Fluxget cut-over test lives in Fluxget's repository.
+See [ROADMAP.md](../ROADMAP.md) for scope history.

@@ -12,14 +12,19 @@ main.v                 the CLI (also a library consumer)
   ├── link              pure text
   ├── session           files, but no sockets
   ├── transfer          manager (pure) ──> Fetcher interface
-  │                                       └── http_fetcher.v ──> net.http
+  │                                       ├── http_fetcher.v ──> net.http
+  │                                       ├── ftp/ ──> net.ftp
+  │                                       └── sftp/ ──> external sftp client
+  ├── torrent           bencode, trackers, DHT, peer wire, seeding
   └── rpc               JSON-RPC shape ──> transfer.Fetcher
 ```
 
 Dependencies only point down. `plan` does not know about HTTP. `transfer` knows
 about byte ranges but not about sockets: it takes a `Fetcher` with two methods,
-`head` and `fetch`. `http_fetcher.v` is the only implementation that exists in
-production and the only file in the engine that opens a connection.
+`head` and `fetch`. HTTP, FTP and SFTP are implementations behind that seam; the
+BitTorrent modules are a separate transport path with their own framing and
+verification. All of them stay behind CLI commands or the RPC server, never
+inside `v test`.
 
 That seam is the reason `v test` is network-free. A test can supply a fetcher
 that writes deterministic bytes at a segment offset and still exercise resume,
@@ -56,7 +61,7 @@ someone has a spare network.
 
 ## The session file is the contract
 
-`internal/session` writes aria2c's `--save-session` format on purpose. A file
+`session/` writes aria2c's `--save-session` format on purpose. A file
 the old engine wrote must be a file the new one reads, and the other way round;
 that is what makes the cut-over reversible. Writes go to a sibling temporary
 file and are renamed over the target, so a power cut leaves the file valid or
@@ -66,7 +71,7 @@ See [ADR-0001](ADR-0001-session-format-is-arias-not-ours.md).
 
 ## The RPC layer
 
-`internal/rpc` is a state machine plus a JSON encoder. It holds the queue and
+`rpc/` is a state machine plus a JSON encoder. It holds the queue and
 the settings document behind one mutex, and answers the subset of `aria2.*`
 Fluxget actually calls. Every numeric field on the wire is a string, and the
 leading `token:` argument is stripped before dispatch — including for
@@ -76,15 +81,16 @@ Three details keep the hot paths cheap:
 
 - The probe happens once. `aria2.addUri` gets the length, and the worker uses
   `transfer.download_with_meta` so the transfer does not probe a second time.
-- A tellStatus row is encoded once per `Download.version` and cached. A state
-  change bumps the version, so the next poll re-encodes; unchanged polls are
-  string assembly only. Rows are written straight to JSON bytes rather than
-  through a map of dynamic values, and the envelope is decoded into a struct.
-  The cached poll benchmark (5,000 `tellActive` calls over 100 rows) went from
-  14.6 s to ~0.77 s; the re-encoding path (500 polls that change every row)
-  went from 1.65 s to ~0.7 s. `getGlobalStat` and `getGlobalOption` are cached
-  the same way (5,000 stat calls over 100 rows: 265 ms to 46 ms), and a
-  six-call `system.multicall` tick costs ~200 ms for 5,000 rounds.
+- Read-only RPC answers are cached at three levels: each `tellStatus` row is
+  encoded once per `Download.version`, each whole `tell*` array once per queue
+  version, and an identical read-only request reuses its entire envelope. State
+  mutations bump the relevant version, so the next poll recomputes. Strings are
+  escaped straight into the response builder rather than through a tree of
+  dynamic values. The 5,000-poll / 100-row `tellActive` benchmark went from
+  14.6 s originally to ~0.20 s with row and array caches, then to ~36 ms with
+  envelope caching; the re-encoding path (500 polls that change every row) went
+  from 1.65 s to ~0.29 s. `getGlobalStat` and `getGlobalOption` use the same
+  version-keyed pattern (5,000 stat calls: 265 ms to 46 ms).
 - A one-segment transfer skips the goroutine and wait group entirely; the
   benchmark for 5,000 small downloads went from 2.52 s to 0.16 s. Multi-segment
   transfers write into preallocated result slots instead of a channel (5,000
@@ -100,5 +106,8 @@ See [RPC.md](RPC.md) and [compat/fluxget.md](compat/fluxget.md).
   V's `net.http` ([ADR-0002](ADR-0002-do-not-own-the-transport.md)).
 - No C shims. "Pure V" means no `C.` declarations and no vendored C
   ([ADR-0003](ADR-0003-pure-over-c-shim.md)).
-- No supervision in this repo. Fluxget owns restart, backoff and readiness.
-- No BitTorrent. The security surface is an open question, not a hidden yes.
+- No OS-level service management. This repo exposes `/health` and a stall
+  supervisor; Fluxget owns process restart and deployment.
+- No BitTorrent uTP or protocol encryption. The core protocols are implemented,
+  but the untrusted-data security surface still needs a sandbox boundary before
+  the client is enabled by default in the desktop app.

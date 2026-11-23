@@ -19,11 +19,11 @@ have caught it being wrong. The two columns that matter are **Proves** and
 | M5 · BitTorrent | ✅ DONE (encrypted streams are a documented non-goal) |
 | M6 · Metalink, checksums | ✅ DONE |
 
-M3 currently covers packaging as a vpm package, the GitHub Page, cancellation
-tokens, a bounded queue, digit validation of untrusted numbers, constant-time
-token comparison and JSON-RPC notification handling. Fluxget's Phase 1–4 suites
-have not been run against this server yet; that is the cut-over test in
-Fluxget's tree, not a claim made here.
+M3 delivered the vpm package, the GitHub Page, cancellation tokens, a bounded
+queue, digit validation of untrusted numbers, constant-time token comparison,
+JSON-RPC notifications, session restore, readiness and a stall supervisor.
+Fluxget's Phase 1–4 suites have not been run against this server yet; that is
+the cut-over test in Fluxget's tree, not a claim made here.
 
 ## Milestone 0 — the manager's brain ✅ DONE
 
@@ -34,7 +34,7 @@ All pure, no sockets.
 |---|---|
 | **Adds** | byte-range planning (multi-connection + resume), URL/name/folder derivation, aria2-format session save/load |
 | **Proves** | resume from a partial prefix; an overshooting offset plans nothing rather than a bogus `Range`; a corrupt session line costs one entry; the write is atomic |
-| **Still absent** | the transfer itself, the daemon, BitTorrent, everything |
+| **Still absent at this point** | the transfer itself, the daemon, and every later protocol |
 
 ## Milestone 1 — HTTP + HTTPS transfer ✅ DONE
 
@@ -45,7 +45,7 @@ All pure, no sockets.
 |---|---|
 | **Adds** | multi-connection resumable HTTP(S) download, a one-byte Range probe, per-download options, the `download` CLI |
 | **Proves** | a resumed download fetches only the remainder; a server that answers 200 to a Range request is detected and the plan collapses to one segment; a failed segment fails the whole download; every byte written is counted |
-| **Still absent** | FTP, BitTorrent, Metalink, checksum verification, mirror liveness probing |
+| **Still absent at this point** | FTP, BitTorrent, Metalink, checksum verification, mirror liveness probing |
 
 **The trap that was expected:** `net.http.download_file_with_progress` gives no
 control over the *connection*, so N connections means N calls, and each one must
@@ -63,7 +63,7 @@ shape, so the swap is a host/port change.
 |---|---|
 | **Adds** | `addUri`, `tellStatus`, `tellActive`, `tellWaiting`, `tellStopped`, `pause`, `unpause`, `pauseAll`, `unpauseAll`, `remove`, `removeDownloadResult`, `getFiles`, `getServers`, `getUris`, `getOption`, `changeOption`, `getPeers`, `getGlobalStat`, `getVersion`, `getGlobalOption`, `changeGlobalOption`, `saveSession`, `shutdown`, `system.multicall`, `system.listMethods` |
 | **Proves** | string-valued numbers; the leading `token:` argument is stripped before dispatch and not repeated inside multicall; a failed download carries `errorCode`/`errorMessage` and never `error`; `saveSession` writes an aria2-format file |
-| **Still absent** | BitTorrent, and the one deliberate wire difference: aria2 expands two mirrors into five `getUris` rows, fluxdl returns one row per source |
+| **Still absent at this point** | BitTorrent; the deliberate wire difference remains: aria2 expands two mirrors into five `getUris` rows, fluxdl returns one row per source |
 
 **Why this order:** it makes the engine replaceable *before* it is good. The
 furthest an incomplete engine can get is "runs the app's own contract", and
@@ -84,8 +84,8 @@ covers the work that makes fluxdl safe to publish and to run under Fluxget.
 | | |
 |---|---|
 | **Adds** | vpm package with public modules; GitHub Page; cancellation tokens checked between segments; a bounded queue (10,000 rows); digit validation of CLI, RPC-option and HTTP length inputs; constant-time token comparison; notification handling; a user-owned default session path |
-| **Proves** | pause and remove signal a worker's token and a removed row is never recreated; `addUri` past the cap returns an error; 72 tests across six test files; full and resumed 1 MiB downloads are byte-identical |
-| **Still absent** | session restore on daemon startup, restart/backoff/readiness supervision, mirror liveness probing, the notice queue, BitTorrent, Metalink, FTP |
+| **Proves** | pause and remove signal a worker's token and a removed row is never recreated; `addUri` past the cap returns an error; 98 tests across twelve test files; full and resumed 1 MiB downloads are byte-identical |
+| **Still absent** | nothing from this milestone — session restore, readiness, the notice queue and the remaining protocols arrived in M4–M6 and later passes |
 
 This is the milestone where fluxdl earns its keep: the same tests that prove
 Fluxget works against `aria2c` must prove it works against something this repo
@@ -106,8 +106,8 @@ in `torrent/` and wired into `aria2.addTorrent` and `fluxdl torrent`.
 | | |
 |---|---|
 | **Adds** | bencode decoder, metainfo and magnet parsing, tracker announce (compact and dictionary peer lists), handshake/bitfield/request/piece messages, rarest-first ordering, per-piece SHA1 |
-| **Proves** | 87 tests including bencode, metadata, magnet, big-endian helpers and bitfield membership; every piece is verified before it is written |
-| **Adds since the core pass** | KRPC DHT fallback, BEP 9 ut_metadata for bare magnets, BEP 11 PEX, opt-in seeding over inbound TCP |
+| **Proves** | 98 tests including bencode, metadata, magnet, big-endian helpers and bitfield membership; every piece is verified before it is written |
+| **Adds since the core pass** | KRPC DHT fallback with transaction matching, BEP 9 ut_metadata for bare magnets, BEP 11 PEX, opt-in seeding over inbound TCP, and size caps on all peer-supplied frames |
 | **Still absent** | uTP and protocol encryption. These are documented non-goals, not silent stalls. |
 
 **Security note:** this client parses untrusted data from strangers in the same
@@ -120,6 +120,25 @@ the desktop app.
 `metalink/` parses Metalink 4 file entries, URLs and hashes; `checksum/` verifies
 `md5`, `sha1` and `sha256`. `aria2.addMetalink` queues a Metalink's files, and a
 `checksum` option turns a mismatch into a failed download rather than a warning.
+
+## After the milestones
+
+Work that followed the original milestone list:
+
+- **SFTP** — `sftp://` downloads through an argv-driven external client, with
+  batch-path validation and no shell.
+- **Cookies and robots** — a locked cookie jar and per-host `robots.txt` rules.
+- **Review hardening** — shared hex decoder, digit guards, bounded peer frames,
+  PEX/DHT/notice caps, constant-time token comparison, and a mutex around shared
+  HTTP state.
+- **Performance** — cached status rows, whole array and whole response caches,
+  direct JSON writing, streaming checksums, a single-segment fast path and
+  parallel DHT lookups.
+- **Site** — a feature-focused GitHub Page replacing the milestone display.
+
+Still open outside this repo: Fluxget's cut-over test. Documented non-goals:
+uTP and BitTorrent protocol encryption; OS-level daemon restart belongs to
+Fluxget.
 
 ## Where the priorities came from
 
