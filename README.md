@@ -40,7 +40,7 @@ fn main() {
 ```
 
 The public modules are `plan`, `link`, `session`, `transfer`, `rpc`, `util`,
-`checksum`, `metalink`, `ftp`, `sftp` and `torrent`. See
+`checksum`, `metalink`, `ftp`, `sftp`, `transports` and `torrent`. See
 [docs/PACKAGE.md](docs/PACKAGE.md) for the API surface and publishing notes.
 
 ## Why this exists
@@ -138,11 +138,15 @@ transfer/                 the engine: probe, concurrent fetch, byte accounting
   http_fetcher.v          the HTTP transport
 ftp/                      an FTP transfer.Fetcher (whole file)
 sftp/                     an SFTP transfer.Fetcher via the system client
+transports/               one registry mapping URL schemes to fetchers
 util/                     shared digit/hex/secret validators
 checksum/                 md5/sha1/sha256 verification
 metalink/                 Metalink 4 files and URLs
 torrent/                  bencode, trackers, peer wire, SHA1 pieces
-rpc/                      loopback JSON-RPC, the subset Fluxget calls
+rpc/                      loopback JSON-RPC, split by concern
+  state.v / wire.v        queue, caches, request parsing, dispatch
+  encode.v / json.v       status JSON writer and value helpers
+  supervise.v / workers.v readiness, notices, download goroutines
 docs/                     the GitHub Pages site and the decision records
 ```
 

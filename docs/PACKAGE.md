@@ -1,6 +1,6 @@
 # fluxdl as a V package
 
-`fluxdl` is a V package with eleven public modules and no third-party dependencies.
+`fluxdl` is a V package with twelve public modules and no third-party dependencies.
 It builds with V 0.5.2.
 
 ## Install
@@ -48,6 +48,7 @@ component (`plan`, `link`, …), because V flattens module prefixes.
 | `metalink` | `MetalinkFile`, `parse` | Metalink 4 files, URLs and hashes |
 | `ftp` | `Fetcher`, `new_fetcher`, `parse_target` | whole-file FTP downloads |
 | `sftp` | `Fetcher`, `new_fetcher`, `parse_target` | whole-file SFTP downloads via the system client |
+| `transports` | `Registry`, `new`, `register`, `fetcher_for`, `Factory` | one registration point for URL schemes |
 | `torrent` | `Torrent`, `parse`, `parse_magnet`, `download`, `resolve_magnet`, `seed`, `announce`, `handshake`, `new_dht` | bencode, trackers, DHT/PEX/magnets, peer wire, SHA1 pieces, seeding |
 
 `transfer.Fetcher` is the seam for callers that want to own the transport:

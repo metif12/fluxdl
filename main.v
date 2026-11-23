@@ -8,13 +8,12 @@
 module main
 
 import os
-import fluxdl.ftp
 import fluxdl.link
 import fluxdl.metalink
 import fluxdl.plan
 import fluxdl.rpc
-import fluxdl.sftp
 import fluxdl.torrent
+import fluxdl.transports
 import fluxdl.session
 import fluxdl.transfer
 import fluxdl.util
@@ -198,12 +197,10 @@ fn cmd_download(args []string) {
 	}
 	path := os.join_path(dir, out)
 
-	fetcher := if url.starts_with('ftp://') {
-		&transfer.Fetcher(ftp.new_fetcher())
-	} else if url.starts_with('sftp://') {
-		&transfer.Fetcher(sftp.new_fetcher())
-	} else {
-		&transfer.Fetcher(transfer.new_http_fetcher())
+	registry := transports.new()
+	fetcher := registry.fetcher_for(url) or {
+		eprintln('fluxdl: no transport for ${url}')
+		exit(1)
 	}
 	meta := fetcher.head(url) or {
 		eprintln('fluxdl: ${err.msg()}')

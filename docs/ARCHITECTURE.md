@@ -15,9 +15,20 @@ main.v                 the CLI (also a library consumer)
   │                                       ├── http_fetcher.v ──> net.http
   │                                       ├── ftp/ ──> net.ftp
   │                                       └── sftp/ ──> external sftp client
+  ├── transports        one registry mapping URL scheme → Fetcher factory
   ├── torrent           bencode, trackers, DHT, peer wire, seeding
-  └── rpc               JSON-RPC shape ──> transfer.Fetcher
+  └── rpc/              JSON-RPC shape ──> transfer.Fetcher
+        state.v         queue, caches, versions
+        wire.v          request parsing and method dispatch
+        encode.v        status-row JSON writer
+        json.v          JSON value helpers
+        supervise.v     readiness, notices, session restore, stall loop
+        workers.v       download goroutines and queue mutations
 ```
+
+`transports.Registry` is the single registration point: adding a scheme is one
+`register()` call, and both the CLI and the RPC manager ask it for a fresh
+fetcher. Adding an RPC method is one dispatch arm plus `method_names()`.
 
 Dependencies only point down. `plan` does not know about HTTP. `transfer` knows
 about byte ranges but not about sockets: it takes a `Fetcher` with two methods,
