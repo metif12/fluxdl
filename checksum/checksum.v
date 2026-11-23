@@ -40,7 +40,12 @@ pub fn hash_file(path string, algo string) !string {
 		'md5' {
 			mut digest := md5.new()
 			for {
-				n := file.read(mut buf) or { break }
+				n := file.read(mut buf) or {
+					if err is os.Eof {
+						break
+					}
+					return err
+				}
 				if n == 0 {
 					break
 				}
@@ -51,7 +56,12 @@ pub fn hash_file(path string, algo string) !string {
 		'sha1' {
 			mut digest := sha1.new()
 			for {
-				n := file.read(mut buf) or { break }
+				n := file.read(mut buf) or {
+					if err is os.Eof {
+						break
+					}
+					return err
+				}
 				if n == 0 {
 					break
 				}
@@ -62,7 +72,12 @@ pub fn hash_file(path string, algo string) !string {
 		'sha256' {
 			mut digest := sha256.new()
 			for {
-				n := file.read(mut buf) or { break }
+				n := file.read(mut buf) or {
+					if err is os.Eof {
+						break
+					}
+					return err
+				}
 				if n == 0 {
 					break
 				}

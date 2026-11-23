@@ -982,6 +982,10 @@ fn (m &Manager) fetcher_for(url string) &transfer.Fetcher {
 // notice records a human-readable event for the caller to drain.
 fn (mut m Manager) notice(text string) {
 	m.mu.lock()
+	// Bounded: an untrusted client can generate failures indefinitely.
+	if m.notices.len >= 1024 {
+		m.notices = m.notices[1..]
+	}
 	m.notices << text
 	m.mu.unlock()
 }

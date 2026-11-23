@@ -6,6 +6,7 @@ import crypto.sha1
 const extended_handshake = 'd1:md11:ut_metadatai1eee'
 const metadata_request = 'd8:msg_typei0e5:piecei0ee'
 const metadata_piece_size = 16 * 1024
+const max_metadata_size = 16 * 1024 * 1024
 
 fn extended_object(payload []u8) !BValue {
 	if payload.len == 0 {
@@ -53,6 +54,9 @@ pub fn fetch_metadata(mut c Conn, info_hash []u8) ![]u8 {
 		if size := get(obj, 'metadata_size') {
 			if total == 0 {
 				total = int(as_int(size))
+				if total <= 0 || total > max_metadata_size {
+					return error('torrent: metadata size out of range')
+				}
 			}
 		}
 		if kind == 0 {
@@ -66,20 +70,26 @@ pub fn fetch_metadata(mut c Conn, info_hash []u8) ![]u8 {
 			continue
 		}
 		index := extended_int(obj, 'piece')
-		piece_data := msg.payload[decoder.pos..]
-		if piece_data.len == 0 {
-			continue
-		}
-		pieces[index] = piece_data.clone()
 		if total <= 0 {
 			if size := get(obj, 'total_size') {
 				total = int(as_int(size))
+				if total <= 0 || total > max_metadata_size {
+					return error('torrent: metadata size out of range')
+				}
 			}
 		}
 		if total <= 0 {
 			continue
 		}
 		expected := (total + metadata_piece_size - 1) / metadata_piece_size
+		if index < 0 || index >= expected {
+			continue
+		}
+		piece_data := msg.payload[decoder.pos..]
+		if piece_data.len == 0 || piece_data.len > metadata_piece_size {
+			continue
+		}
+		pieces[index] = piece_data.clone()
 		if pieces.len < expected {
 			// Ask for any piece that has not arrived yet.
 			for p := 0; p < expected; p++ {

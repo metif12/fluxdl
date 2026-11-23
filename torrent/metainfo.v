@@ -42,7 +42,11 @@ fn (mut d Decoder) value() !BValue {
 			}
 			text := d.data[start..d.pos].bytestr()
 			d.pos++
-			return i64(text.i64())
+			digits := if text.starts_with('-') { text[1..] } else { text }
+			if !all_digits(digits) {
+				return error('bencode: malformed integer ${text}')
+			}
+			return i64(digits.i64()) * if text.starts_with('-') { -1 } else { 1 }
 		}
 		`l` {
 			d.pos++

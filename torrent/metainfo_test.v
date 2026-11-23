@@ -36,6 +36,14 @@ fn test_parse_magnet() {
 	assert m.info_hash_raw.len == 20, '${m.info_hash_raw.len}'
 }
 
+fn test_bencode_integer_requires_digits() {
+	decode('i12xe'.bytes()) or {
+		assert err.msg().contains('malformed integer'), err.msg()
+		return
+	}
+	assert false, 'trailing garbage in an integer must be rejected'
+}
+
 fn test_malformed_bencode_is_an_error() {
 	decode('i12'.bytes()) or {
 		assert err.msg().contains('unterminated'), err.msg()

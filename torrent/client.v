@@ -6,6 +6,7 @@ import fluxdl.link
 import os
 
 const peer_id = '-FLUX01-000000000000'
+const max_torrent_size = i64(16) * 1024 * 1024 * 1024
 
 struct PieceScore {
 	index int
@@ -43,6 +44,11 @@ pub fn resolve_magnet(magnet &Torrent) !&Torrent {
 
 pub fn download(t &Torrent, dir string) !string {
 	meta := if t.pieces.len == 0 { resolve_magnet(t) or { return err } } else { t }
+	// A malicious .torrent can declare an enormous length; do not create a
+	// huge sparse file on its say-so.
+	if meta.length <= 0 || meta.length > max_torrent_size {
+		return error('torrent: length ${meta.length} out of range')
+	}
 	path := os.join_path(dir, link.safe_name(meta.name))
 	if !os.exists(path) {
 		os.create(path)!

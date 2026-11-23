@@ -1,11 +1,14 @@
 // peer.v - the BitTorrent peer wire protocol: handshake, bitfield, requests
-// and SHA1-verified pieces. DHT and PEX are deliberately not implemented here.
+// and SHA1-verified pieces. DHT and PEX live in dht.v and metadata.v.
 module torrent
 
 import crypto.sha1
 import net
+import time
 
 const block_size = 16 * 1024
+const max_message_size = 1024 * 1024
+const max_pex_peers = 2048
 
 pub struct Message {
 pub:
@@ -38,6 +41,7 @@ pub fn handshake(peer Peer, info_hash []u8, peer_id string) !&Conn {
 		return error('torrent: info_hash and peer_id must be 20 bytes')
 	}
 	socket := net.dial_tcp('${peer.ip}:${peer.port}')!
+	socket.set_read_timeout(10 * time.second)
 	mut msg := []u8{}
 	msg << u8(19)
 	msg << 'BitTorrent protocol'.bytes()
@@ -89,11 +93,19 @@ pub fn (mut c Conn) next_message() !Message {
 	if length == 0 {
 		return Message{ id: 255, payload: [] }
 	}
+	if length < 0 || length > max_message_size {
+		return error('torrent: peer message length ${length} out of range')
+	}
 	mut body := []u8{len: length}
 	c.read_exact(mut body)!
-	if body[0] == u8(20) {
+	if body[0] == u8(20) && c.pex_peers.len < max_pex_peers {
 		discovered := parse_pex(body[1..]) or { [] }
-		c.pex_peers << discovered
+		for peer in discovered {
+			if c.pex_peers.len >= max_pex_peers {
+				break
+			}
+			c.pex_peers << peer
+		}
 	}
 	return Message{ id: body[0], payload: body[1..].clone() }
 }

@@ -69,6 +69,9 @@ fn seed_peer(socket &net.TcpConn, meta &Torrent, path string) {
 		if length == 0 {
 			continue
 		}
+		if length < 0 || length > max_message_size {
+			return
+		}
 		mut body := []u8{len: length}
 		read_exact(socket, mut body) or { return }
 		if body[0] == u8(2) {

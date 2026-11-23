@@ -242,7 +242,7 @@ fn cmd_seed(args []string) {
 			dir = args[i]
 		} else if args[i] == '-p' && i + 1 < args.len {
 			i++
-			port = args[i].int()
+			port = util.int_or(args[i], 6881)
 		}
 		i++
 	}

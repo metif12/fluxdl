@@ -14,6 +14,13 @@ fn test_parse_target_defaults() {
 	assert t.user == '', t.user
 }
 
+fn test_batch_path_rejects_command_injection() {
+	assert valid_batch_path('/pub/f.bin'), 'ordinary path'
+	assert !valid_batch_path('/pub/f.bin\nput /etc/passwd /tmp/x'), 'newline is a batch command separator'
+	assert !valid_batch_path('relative/path'), 'remote path must be absolute'
+	assert !valid_batch_path('/pub/a"b'), 'quotes would break batch quoting'
+}
+
 fn test_parse_target_rejects_other_schemes() {
 	parse_target('ftp://example.test/f') or {
 		assert err.msg().contains('not an sftp'), err.msg()

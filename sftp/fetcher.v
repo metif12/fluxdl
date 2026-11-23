@@ -8,8 +8,23 @@ module sftp
 
 import fluxdl.plan
 import fluxdl.transfer
+import fluxdl.util
 import os
 import time
+
+// A batch file is line-oriented: a newline in a remote path becomes a new
+// sftp command. Refuse anything that could change the command structure.
+fn valid_batch_path(path string) bool {
+	if path == '' || !path.starts_with('/') {
+		return false
+	}
+	for c in path {
+		if c < 0x20 || c == `"` || c == `\\` {
+			return false
+		}
+	}
+	return true
+}
 
 pub struct Target {
 pub:
@@ -37,7 +52,7 @@ pub fn parse_target(raw string) !Target {
 		tail := rest[colon + 1..]
 		slash := tail.index('/') or { -1 }
 		port_text := if slash >= 0 { tail[..slash] } else { tail }
-		port = port_text.int()
+		port = util.int_or(port_text, 0)
 		if port <= 0 {
 			return error('sftp: bad port ${port_text}')
 		}
@@ -78,14 +93,17 @@ pub fn (f Fetcher) head(url string) !transfer.Meta {
 	target := parse_target(url) or {
 		return error('sftp: ${err.msg()}')
 	}
-	suffix := i64(time.sys_mono_now()).str()
+	if !valid_batch_path(target.path) {
+		return error('sftp: unsafe remote path ${target.path}')
+	}
+	suffix := '${os.getpid()}-${i64(time.sys_mono_now())}'
 	tmp := os.join_path(os.temp_dir(), 'fluxdl-sftp-${suffix}.bin')
 	batch := os.join_path(os.temp_dir(), 'fluxdl-sftp-${suffix}.batch')
 	defer {
 		os.rm(tmp) or {}
 		os.rm(batch) or {}
 	}
-	os.write_file(batch, 'get ${target.path} ${tmp}\nquit\n') or {
+	os.write_file(batch, 'get "${target.path}" ${tmp}\nquit\n') or {
 		return error('sftp: cannot write batch file')
 	}
 

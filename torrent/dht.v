@@ -7,6 +7,8 @@ import net
 import time
 
 const dht_bootstrap = ['router.bittorrent.com:6881', 'dht.transmissionbt.com:6881']
+const max_dht_peers = 2048
+const max_dht_queue = 4096
 
 fn bstr(data []u8) string {
 	return '${data.len}:${data.bytestr()}'
@@ -48,18 +50,19 @@ pub fn new_dht() &Dht {
 
 struct DhtReply {
 	addr  string
+	tid   string
 	value ?BValue
 }
 
-fn query_async(addr string, payload string, ch chan DhtReply) {
+fn query_async(addr string, payload string, tid string, ch chan DhtReply) {
 	value := dht_query(addr, payload) or {
-		ch <- DhtReply{ addr: addr }
+		ch <- DhtReply{ addr: addr, tid: tid }
 		return
 	}
-	ch <- DhtReply{ addr: addr, value: value }
+	ch <- DhtReply{ addr: addr, tid: tid, value: value }
 }
 
-fn collect_reply(reply BValue, mut peers []Peer, mut queue []string, seen map[string]bool) {
+fn collect_reply(reply BValue, tid string, mut peers []Peer, mut queue []string, mut seen map[string]bool) {
 	root := match reply {
 		map[string]BValue {
 			reply
@@ -68,13 +71,23 @@ fn collect_reply(reply BValue, mut peers []Peer, mut queue []string, seen map[st
 			return
 		}
 	}
+	// A reply from another transaction is not an answer to this query.
+	if string_field(root, 't') != tid {
+		return
+	}
 	response := get(root, 'r') or { return }
 	if response is map[string]BValue {
 		if values := get(response, 'values') {
 			if values is []BValue {
 				for value in values {
 					if value is string {
-						peers << parse_compact_peers(value.bytes()) or { [] }
+						found := parse_compact_peers(value.bytes()) or { [] }
+						for peer in found {
+							if peers.len >= max_dht_peers {
+								break
+							}
+							peers << peer
+						}
 					}
 				}
 			}
@@ -86,7 +99,8 @@ fn collect_reply(reply BValue, mut peers []Peer, mut queue []string, seen map[st
 					ip := '${u8(raw[i + 20])}.${u8(raw[i + 21])}.${u8(raw[i + 22])}.${u8(raw[i + 23])}'
 					port := (int(u8(raw[i + 24])) << 8) | int(u8(raw[i + 25]))
 					next := '${ip}:${port}'
-					if !seen[next] {
+					if !seen[next] && queue.len < max_dht_queue {
+						seen[next] = true
 						queue << next
 					}
 				}
@@ -119,12 +133,12 @@ pub fn (mut d Dht) find_peers(info_hash []u8) ![]Peer {
 			tid := '${d.tid % 256}'
 			payload := 'd1:t2:${tid}1:y1:q1:q9:get_peers1:ad2:id' + bstr(d.id) +
 				'9:info_hash' + bstr(info_hash) + 'ee'
-			go query_async(addr, payload, ch)
+			go query_async(addr, payload, tid, ch)
 		}
 		for _ in batch {
 			reply := <-ch
 			if value := reply.value {
-				collect_reply(value, mut peers, mut queue, seen)
+				collect_reply(value, reply.tid, mut peers, mut queue, mut seen)
 			}
 		}
 	}

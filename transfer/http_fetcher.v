@@ -11,6 +11,7 @@ import fluxdl.util
 import net.http
 import net.urllib
 import os
+import sync
 
 struct RobotsRules {
 	allow    string
@@ -19,6 +20,7 @@ struct RobotsRules {
 
 pub struct HttpState {
 mut:
+	mu      sync.Mutex
 	cookies map[string]string
 	// One entry per host, not per path: robots.txt does not change between URLs.
 	robots map[string]RobotsRules
@@ -39,10 +41,22 @@ pub fn new_http_fetcher() &HttpFetcher {
 }
 
 fn (mut s HttpState) remember(key string, rules RobotsRules) {
+	s.mu.lock()
+	defer {
+		s.mu.unlock()
+	}
+	// A bounded cache: an origin stream must not grow this without limit.
+	if s.robots.len >= 1024 {
+		s.robots.clear()
+	}
 	s.robots[key] = rules
 }
 
 fn (s &HttpState) allowed(key string) ?RobotsRules {
+	s.mu.lock()
+	defer {
+		s.mu.unlock()
+	}
 	if key in s.robots {
 		return s.robots[key] or { return none }
 	}
@@ -55,7 +69,19 @@ fn (mut s HttpState) store_cookie(header string) {
 	if parts.len < 2 || parts[0].trim_space() == '' {
 		return
 	}
+	s.mu.lock()
+	defer {
+		s.mu.unlock()
+	}
 	s.cookies[parts[0].trim_space()] = parts[1..].join('=').trim_space()
+}
+
+fn (f HttpFetcher) cookie_snapshot() map[string]string {
+	f.state.mu.lock()
+	defer {
+		f.state.mu.unlock()
+	}
+	return f.state.cookies.clone()
 }
 
 fn origin_of(url string) !string {
@@ -161,7 +187,7 @@ pub fn (f HttpFetcher) head(url string) !Meta {
 		header:               h
 		validate:             true
 		stop_copying_limit:   64
-		cookies:              f.state.cookies
+		cookies:              f.cookie_snapshot()
 		stop_receiving_limit: 64
 	)!
 	if cookie := res.header.get_custom('set-cookie') {
@@ -215,7 +241,7 @@ pub fn (f HttpFetcher) fetch(url string, seg plan.Segment, path string) !i64 {
 		header:             h
 		validate:           true
 		user_ptr:           voidptr(w)
-		cookies:            f.state.cookies
+		cookies:            f.cookie_snapshot()
 		on_progress_body:   write_chunk
 		stop_copying_limit: 64
 	)!
