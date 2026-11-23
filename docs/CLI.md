@@ -26,7 +26,7 @@ zero, nothing past the end.
 
 ### `fluxdl session <path>`
 
-Reads an aria2-format session file and prints how many downloads came back and
+Reads a compatible flat session file (the `--save-session` shape) and prints how many downloads came back and
 how many lines were lost to corruption. A corrupt line costs one entry, never
 the queue; the loss count is the interesting half of the output.
 
@@ -73,7 +73,7 @@ secret is a bearer token, and this is not a public API.
 |---|---|---|
 | `--addr <host:port>` | listen address | `127.0.0.1:9009` |
 | `--secret <token>` | required leading `token:` argument | `FLUXDL_SECRET` |
-| `--session <path>` | aria2-format session file | `FLUXDL_SESSION`, else `~/.fluxdl/session` |
+| `--session <path>` | flat session file (aria2-compatible shape) | `FLUXDL_SESSION`, else `~/.fluxdl/session` |
 
 ```powershell
 ./fluxdl.exe serve --addr 127.0.0.1:9009 --secret change-me --session D:/Downloads/fluxdl.session

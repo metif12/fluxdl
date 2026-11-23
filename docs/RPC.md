@@ -1,6 +1,11 @@
 # JSON-RPC reference
 
-fluxdl serves the same loopback shape Fluxget talks to today:
+fluxdl exposes an application-facing JSON-RPC API on loopback. The `aria2.*`
+method prefix below is a wire contract, not a product name: it is what the
+desktop app already sends, so adopting fluxdl does not require changing the
+client. See [Why method names start with aria2](#why-method-names-start-with-aria2).
+
+The loopback shape:
 
 - `POST /jsonrpc`, `Content-Type: application/json`;
 - a JSON-RPC 2.0 envelope with `jsonrpc`, `id`, and either `result` or `error`;
@@ -20,6 +25,18 @@ The live queue is capped at 10,000 downloads; an `addUri` past that limit return
 a JSON-RPC error. `pause` and `remove` signal the worker's cancellation token, so
 a transfer stops at the next segment boundary and a removed row is never
 recreated by its worker.
+
+## Why method names start with `aria2`
+
+The method strings are part of the public protocol that Fluxget speaks. They are
+kept exactly as the app expects so switching engines is a host-and-port change;
+renaming them would break the cut-over. The session file uses the same idea:
+its flat `--save-session` shape is a compatibility format the app can already
+read. Neither is branding, and neither implies the engine is derived from
+another project — fluxdl is built from scratch in pure V.
+
+Internal names, docs and CLI use `fluxdl` everywhere. Only the wire protocol
+and the on-disk session format keep their established names.
 
 ## Methods
 

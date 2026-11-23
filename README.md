@@ -10,6 +10,7 @@ and Metalink sit behind one transport interface, with the JSON-RPC surface
 Fluxget already uses. No C shims, no second HTTP stack, no legacy code to carry.
 
 **[Project site and documentation](https://metif12.github.io/fluxdl/)** ·
+[Guides](docs/GUIDES.md) · [V module API](docs/API.md) ·
 [Quick start](docs/CLI.md) · [Architecture](docs/ARCHITECTURE.md) ·
 [RPC reference](docs/RPC.md) · [vpm package](docs/PACKAGE.md) ·
 [Roadmap](ROADMAP.md)
@@ -56,8 +57,8 @@ interchangeable, and the hot paths are measured rather than assumed.
    binary; V's `net.http` owns the wire and this engine owns the manager.
 3. **Replaceable protocols.** HTTP, FTP, SFTP and BitTorrent sit behind clear
    seams, so a new transport is one registration rather than a rewrite.
-4. **Speak the app's language.** The loopback JSON-RPC shape and aria2-format
-   session file mean Fluxget can adopt it without a migration.
+4. **Speak the app's language.** The loopback JSON-RPC method names and the
+   flat session-file shape mean Fluxget can adopt it without a migration.
 
 ## What it does today
 
@@ -66,9 +67,9 @@ interchangeable, and the hot paths are measured rather than assumed.
 | **Multi-connection downloads over HTTP(S)** | One file, N ranges, `Range: bytes=first-last`. Even segments, remainder on segment zero, nothing past EOF — arithmetic that makes the progress bar finish when it looks finished. |
 | **Resume** | Reads what is on disk and plans only the remainder. An offset that overshoots the file yields an empty plan rather than a request for a byte that does not exist. |
 | **Servers that ignore `Range`** | A one-byte probe detects a 200 answer and collapses the download to one connection instead of writing N copies of the body into one file. |
-| **Session save/restore in aria2's own format** | `--save-session` written flat, atomic by rename, and a reader that loses **one** line on corruption rather than the whole queue. |
+| **Session save/restore in a compatible flat format** | `--save-session` shape, written atomically by rename, and a reader that loses **one** line on corruption rather than the whole queue. |
 | **Mirror sets** | De-duplicated, ordered, and labelled by kind — a `.torrent` path is bytes, a magnet is its own protocol, a URL is HTTP. |
-| **Per-download options** | Where aria2's own option names apply. |
+| **Per-download options** | Option names from the established session vocabulary apply per download. |
 | **The JSON-RPC subset Fluxget calls** | `addUri`, `tellStatus`, `tellActive/Waiting/Stopped`, pause/unpause, remove, `getFiles`, `getUris`, `getOption`, `changeOption`, global stat/options, `saveSession`, `shutdown`, `system.multicall`, `system.listMethods`, plus `addTorrent`, `addMagnet`, `addMetalink` and `getNotices` — on the same loopback POST shape, with string-valued numbers and the leading `token:` argument. |
 | **FTP** | An `ftp://` URL uses a `net.ftp`-backed fetcher. Whole-file only, because V's FTP client has no range REST. |
 | **BitTorrent core** | Bencode, `.torrent` metadata, HTTP trackers, the peer wire protocol, rarest-first piece selection and SHA1 verification of every piece. |
@@ -127,7 +128,7 @@ v.mod
 main.v                    the CLI
 plan/      plan.v         how one download is split into byte ranges
 link/      link.v         what an address means, and what to call the file
-session/   session.v      the queue on disk, in aria2's format
+session/   session.v      the queue on disk, in a compatible flat format
 transfer/                 the engine: probe, concurrent fetch, byte accounting
   transfer.v              pure manager; the transport is injected
   http_fetcher.v          the HTTP transport

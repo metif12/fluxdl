@@ -1,4 +1,4 @@
-# ADR-0001: the session file is aria2c's format, not ours
+# ADR-0001: the session file uses a compatible flat format
 
 - **Status:** accepted
 - **Date:** 2026-10-03

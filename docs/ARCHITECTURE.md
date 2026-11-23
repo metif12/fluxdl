@@ -73,9 +73,9 @@ someone has a spare network.
 
 ## The session file is the contract
 
-`session/` writes aria2c's `--save-session` format on purpose. A file
-the old engine wrote must be a file the new one reads, and the other way round;
-that is what makes the cut-over reversible. Writes go to a sibling temporary
+`session/` writes the compatible `--save-session` flat format on purpose: a
+file written by the existing app must remain readable, and the other way round.
+That is what makes the cut-over reversible. Writes go to a sibling temporary
 file and are renamed over the target, so a power cut leaves the file valid or
 absent. A corrupt line costs one entry, never the queue.
 
@@ -84,8 +84,8 @@ See [ADR-0001](ADR-0001-session-format-is-arias-not-ours.md).
 ## The RPC layer
 
 `rpc/` is a state machine plus a JSON encoder. It holds the queue and
-the settings document behind one mutex, and answers the subset of `aria2.*`
-Fluxget actually calls. Every numeric field on the wire is a string, and the
+the settings document behind one mutex, and answers the `aria2.*` method names
+Fluxget actually calls. Those strings are a wire contract, not branding. Every numeric field on the wire is a string, and the
 leading `token:` argument is stripped before dispatch — including for
 `system.multicall`, whose inner calls do not repeat it.
 

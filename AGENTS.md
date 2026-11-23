@@ -43,7 +43,7 @@ Read once, and add to the list when you meet a new one:
 
 ## 3. The session file is the contract, not an implementation detail
 
-- It is written in `aria2c`'s format on purpose. See `session/session.v`:
+- It is written in the compatible flat `--save-session` format on purpose. See `session/session.v`:
   the shape that survives the app not running is the one the other engine can also
   read, and a cut-over you cannot reverse is a cut-over nobody will let you do.
 - A corrupt line costs **one** entry, never the queue. This is asserted by
