@@ -19,6 +19,7 @@ main.v                 the CLI (also a library consumer)
   ├── torrent           bencode, trackers, DHT, peer wire, seeding
   └── rpc/              JSON-RPC shape ──> transfer.Fetcher
         rpc.v           queue, caches, versions
+        methods.v       method registry: names + read-only flags
         wire.v          request parsing and method dispatch
         encode.v        status-row JSON writer
         json.v          JSON value helpers

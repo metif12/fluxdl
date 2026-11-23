@@ -31,22 +31,6 @@ fn provided_secret(m &Manager, params []json2.Any) string {
 	return ''
 }
 
-// readonly_method lists calls whose answer depends only on queue/option state,
-// so an identical request can reuse its last envelope.
-fn readonly_method(method string) bool {
-	return match method {
-		'aria2.tellStatus', 'aria2.tellActive', 'aria2.tellWaiting', 'aria2.tellStopped',
-		'aria2.getFiles', 'aria2.getServers', 'aria2.getUris', 'aria2.getOption',
-		'aria2.getGlobalOption', 'aria2.getGlobalStat', 'aria2.getVersion',
-		'system.listMethods' {
-			true
-		}
-		else {
-			false
-		}
-	}
-}
-
 // handle_payload answers one JSON-RPC request body.
 //
 // A leading `token:<secret>` is stripped after checking it, because aria2
@@ -148,40 +132,6 @@ pub fn (mut m Manager) handle_payload(raw string) string {
 		m.mu.unlock()
 	}
 	return body
-}
-
-fn method_names() []string {
-	return [
-		'aria2.addUri',
-		'aria2.addTorrent',
-		'aria2.addMagnet',
-		'aria2.tellStatus',
-		'aria2.tellActive',
-		'aria2.tellWaiting',
-		'aria2.tellStopped',
-		'aria2.pause',
-		'aria2.unpause',
-		'aria2.pauseAll',
-		'aria2.unpauseAll',
-		'aria2.remove',
-		'aria2.removeDownloadResult',
-		'aria2.getFiles',
-		'aria2.getServers',
-		'aria2.getUris',
-		'aria2.getOption',
-		'aria2.changeOption',
-		'aria2.getPeers',
-		'aria2.getGlobalStat',
-		'aria2.getVersion',
-		'aria2.getGlobalOption',
-		'aria2.changeGlobalOption',
-		'aria2.saveSession',
-		'aria2.shutdown',
-		'aria2.addMetalink',
-		'aria2.getNotices',
-		'system.multicall',
-		'system.listMethods',
-	]
 }
 
 // dispatch maps a method name to an already-encoded JSON result, an aria2

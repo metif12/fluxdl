@@ -139,7 +139,8 @@ checksum/                 md5/sha1/sha256 verification
 metalink/                 Metalink 4 files and URLs
 torrent/                  bencode, trackers, peer wire, SHA1 pieces
 rpc/                      loopback JSON-RPC, split by concern
-  state.v / wire.v        queue, caches, request parsing, dispatch
+  rpc.v / methods.v       queue, caches, method registry
+  wire.v                  request parsing and dispatch
   encode.v / json.v       status JSON writer and value helpers
   supervise.v / workers.v readiness, notices, download goroutines
 docs/                     the GitHub Pages site and the decision records
