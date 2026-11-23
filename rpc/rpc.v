@@ -54,6 +54,13 @@ struct StatusCache {
 	json    string
 }
 
+// ResponseCache is a complete envelope for one repeated read-only request.
+struct ResponseCache {
+	queue_version   int
+	options_version int
+	body            string
+}
+
 // RowsCache is a whole tellActive/TellWaiting/tellStopped array for one queue
 // version. Fluxget polls these every tick; rebuilding 100 row strings per tick
 // is the remaining cost after per-row caching.
@@ -76,6 +83,7 @@ pub mut:
 	fetcher      &transfer.Fetcher
 	status_cache map[string]StatusCache
 	row_lists    map[string]RowsCache
+	responses    map[string]ResponseCache
 	cancels      map[string]&transfer.Cancel
 	notices      []string
 	started_at   map[string]i64
@@ -117,6 +125,7 @@ pub fn new_manager(secret string, session_path string) &Manager {
 		fetcher:      transfer.new_http_fetcher()
 		status_cache: map[string]StatusCache{}
 		row_lists:    map[string]RowsCache{}
+		responses:    map[string]ResponseCache{}
 		cancels:      map[string]&transfer.Cancel{}
 		started_at:   map[string]i64{}
 		auto_start:   true
@@ -268,6 +277,22 @@ struct RpcRequest {
 	id     ?json2.Any
 }
 
+// readonly_method lists calls whose answer depends only on queue/option state,
+// so an identical request can reuse its last envelope.
+fn readonly_method(method string) bool {
+	return match method {
+		'aria2.tellStatus', 'aria2.tellActive', 'aria2.tellWaiting', 'aria2.tellStopped',
+		'aria2.getFiles', 'aria2.getServers', 'aria2.getUris', 'aria2.getOption',
+		'aria2.getGlobalOption', 'aria2.getGlobalStat', 'aria2.getVersion',
+		'system.listMethods' {
+			true
+		}
+		else {
+			false
+		}
+	}
+}
+
 // handle_payload answers one JSON-RPC request body.
 //
 // A leading `token:<secret>` is stripped after checking it, because aria2
@@ -299,6 +324,19 @@ pub fn (mut m Manager) handle_payload(raw string) string {
 		params[1..]
 	} else {
 		params
+	}
+
+	cacheable := readonly_method(method)
+	if cacheable {
+		m.mu.lock()
+		if raw in m.responses {
+			cached := m.responses[raw]
+			if cached.queue_version == m.queue_version && cached.options_version == m.options_version {
+				m.mu.unlock()
+				return cached.body
+			}
+		}
+		m.mu.unlock()
 	}
 
 	if method == 'system.multicall' {
@@ -338,7 +376,17 @@ pub fn (mut m Manager) handle_payload(raw string) string {
 	if code != 0 {
 		return fail(id, code, msg)
 	}
-	return ok(id, result_json)
+	body := ok(id, result_json)
+	if cacheable {
+		m.mu.lock()
+		m.responses[raw] = ResponseCache{
+			queue_version:   m.queue_version
+			options_version: m.options_version
+			body:            body
+		}
+		m.mu.unlock()
+	}
+	return body
 }
 
 fn field_from(arr []json2.Any, i int) json2.Any {
