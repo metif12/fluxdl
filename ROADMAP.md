@@ -84,7 +84,7 @@ covers the work that makes fluxdl safe to publish and to run under Fluxget.
 | | |
 |---|---|
 | **Adds** | vpm package with public modules; GitHub Page; cancellation tokens checked between segments; a bounded queue (10,000 rows); digit validation of CLI, RPC-option and HTTP length inputs; constant-time token comparison; notification handling; a user-owned default session path |
-| **Proves** | pause and remove signal a worker's token and a removed row is never recreated; `addUri` past the cap returns an error; 98 tests across twelve test files; full and resumed 1 MiB downloads are byte-identical |
+| **Proves** | pause and remove signal a worker's token and a removed row is never recreated; `addUri` past the cap returns an error; 102 tests across fourteen test files; full and resumed 1 MiB downloads are byte-identical |
 | **Still absent** | nothing from this milestone — session restore, readiness, the notice queue and the remaining protocols arrived in M4–M6 and later passes |
 
 This is the milestone where fluxdl earns its keep: the same tests that prove
@@ -106,7 +106,7 @@ in `torrent/` and wired into `aria2.addTorrent` and `fluxdl torrent`.
 | | |
 |---|---|
 | **Adds** | bencode decoder, metainfo and magnet parsing, tracker announce (compact and dictionary peer lists), handshake/bitfield/request/piece messages, rarest-first ordering, per-piece SHA1 |
-| **Proves** | 98 tests including bencode, metadata, magnet, big-endian helpers and bitfield membership; every piece is verified before it is written |
+| **Proves** | 102 tests including bencode, metadata, magnet, big-endian helpers and bitfield membership; every piece is verified before it is written |
 | **Adds since the core pass** | KRPC DHT fallback with transaction matching, BEP 9 ut_metadata for bare magnets, BEP 11 PEX, opt-in seeding over inbound TCP, and size caps on all peer-supplied frames |
 | **Still absent** | uTP and protocol encryption. These are documented non-goals, not silent stalls. |
 

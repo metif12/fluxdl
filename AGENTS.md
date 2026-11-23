@@ -8,10 +8,10 @@ disagree, the stricter one wins: this code will run in Fluxget's process space.
 - `plan`, `link` and `session` are **pure**. No sockets,
   no `http.`, no `net.`, no `time.` outside `main.v`, `transfer` and
   `rpc`.
-- `transfer/transfer.v` stays pure by taking a `Fetcher` interface. The
-  only production implementation that opens a socket is
-  `transfer/http_fetcher.v`. A new network path must go behind the same
-  interface or this rule is broken.
+- `transfer/transfer.v` stays pure by taking a `Fetcher` interface. HTTP,
+  FTP and SFTP are implementations behind it; BitTorrent is a separate
+  transport path with its own framing. Any new network path must be reachable
+  only from a CLI command or the RPC server, never from `v test`.
 - `v test` never touches the network and never starts a download. Anything that
   does is behind an env var and capped at 1 MiB, the same ceiling Fluxget uses.
 - A test that cannot fail is worse than no test. Disable the rule, watch the

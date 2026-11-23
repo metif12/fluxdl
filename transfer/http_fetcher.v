@@ -1,4 +1,4 @@
-// http_fetcher.v - the only file in the engine that touches a socket.
+// http_fetcher.v - the HTTP transport behind transfer.Fetcher.
 //
 // It uses V's net.http for TLS, redirects and chunked encoding (ADR-0002). The
 // one thing it adds is a progress callback that writes each chunk into the

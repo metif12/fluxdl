@@ -2,7 +2,7 @@
 // count what came back.
 //
 // This module is deliberately split in two. The arithmetic and the counting live
-// here and are tested without a socket; the wire lives in http_fetcher.v behind
+// here and are tested without a socket; the wire lives in transports behind
 // the Fetcher interface. A fake Fetcher can therefore prove the manager's rules
 // (resume, one segment when the server ignores Range, every byte accounted for)
 // in a unit test, which is why those rules are here and not in the HTTP code.

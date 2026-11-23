@@ -147,13 +147,13 @@ docs/                     the GitHub Pages site and the decision records
 
 `plan`, `link` and `session` are pure: no sockets, no files except the session's
 own temp files, no time. `transfer` keeps its manager pure by taking a `Fetcher`
-interface; only `http_fetcher.v` uses `net.http`. That is why the interesting
-bugs are found without a network.
+interface; HTTP, FTP and SFTP are separate transports. That is why the
+interesting bugs are found without a network.
 
 ## Testing
 
 ```powershell
-v test .                  # 98 tests across twelve module test files
+v test .                  # 102 tests across fourteen test files
 v fmt -w .                # v fmt is law
 ```
 
