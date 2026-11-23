@@ -20,15 +20,18 @@ struct RpcRequest {
 	id     ?json2.Any
 }
 
-fn provided_secret(m &Manager, params []json2.Any) string {
-	if params.len == 0 {
-		return ''
+// cache_key_for removes the secret from a raw request without decoding it,
+// so a repeated read-only call can hit the cache before any JSON work happens.
+fn cache_key_for(raw string, secret string) string {
+	if secret == '' {
+		return raw
 	}
-	value := any_str(params[0])
-	if value.starts_with('token:') {
-		return m.secret
+	at := raw.index('token:') or { return raw }
+	start := at + 6
+	if start + secret.len > raw.len || raw[start..start + secret.len] != secret {
+		return raw
 	}
-	return ''
+	return raw[..start] + raw[start + secret.len..]
 }
 
 // handle_payload answers one JSON-RPC request body.
@@ -37,6 +40,19 @@ fn provided_secret(m &Manager, params []json2.Any) string {
 // does NOT repeat it inside system.multicall's inner calls. Every numeric
 // field in a result is a string, including in nested objects.
 pub fn (mut m Manager) handle_payload(raw string) string {
+	// Try the response cache before decoding. A request carrying a wrong token
+	// cannot match: the key built here scrubs only the exact configured secret.
+	cache_key := cache_key_for(raw, m.secret)
+	m.mu.lock()
+	if cache_key in m.responses {
+		cached := m.responses[cache_key]
+		if cached.queue_version == m.queue_version && cached.options_version == m.options_version {
+			m.mu.unlock()
+			return cached.body
+		}
+	}
+	m.mu.unlock()
+
 	req := json2.decode[RpcRequest](raw) or {
 		return fail(null_id(), -32700, 'Parse error')
 	}
@@ -65,24 +81,6 @@ pub fn (mut m Manager) handle_payload(raw string) string {
 	}
 
 	cacheable := m.is_read_only(method)
-	// The cache key omits the leading token argument: the secret must not be
-	// retained as a map key for the manager's whole lifetime.
-	cache_key := if params.len > 0 && any_str(params[0]).starts_with('token:') {
-		method + '\x00' + raw[raw.index('token:') or { raw.len }..].replace(provided_secret(m, params), '')
-	} else {
-		method + '\x00' + raw
-	}
-	if cacheable {
-		m.mu.lock()
-		if cache_key in m.responses {
-			cached := m.responses[cache_key]
-			if cached.queue_version == m.queue_version && cached.options_version == m.options_version {
-				m.mu.unlock()
-				return cached.body
-			}
-		}
-		m.mu.unlock()
-	}
 
 	if method == 'system.multicall' {
 		mut out := strings.new_builder(256)
