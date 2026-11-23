@@ -18,7 +18,6 @@
       <nav class="site-nav" aria-label="Main">
         <a href="#features">What it does</a>
         <a href="#how">How it works</a>
-        <a href="#roadmap">Roadmap</a>
         <a href="#start">Quick start</a>
         <a href="https://github.com/metif12/fluxdl" rel="noopener">GitHub</a>
       </nav>
@@ -40,11 +39,12 @@
           <a class="btn btn-primary" href="#start">Get started <span aria-hidden="true">→</span></a>
           <a class="btn btn-ghost" href="https://github.com/metif12/fluxdl" rel="noopener">View source</a>
         </div>
-        <div class="status" aria-label="Milestone status">
-          <span class="pill done">M0 · manager brain — done</span>
-          <span class="pill done">M1 · HTTP transfer — done</span>
-          <span class="pill done">M2 · RPC cut-over — done</span>
-          <span class="pill done">M3 · hardening — done</span>
+        <div class="status" aria-label="Highlights">
+          <span class="pill">Multi-connection HTTP(S)</span>
+          <span class="pill">Resumable</span>
+          <span class="pill">aria2 JSON-RPC</span>
+          <span class="pill">FTP · SFTP · BitTorrent</span>
+          <span class="pill">Pure V package</span>
         </div>
       </section>
 
@@ -72,11 +72,35 @@
           </article>
           <article class="card">
             <h3>The RPC surface Fluxget calls</h3>
-            <p>25 methods on loopback JSON-RPC: string-valued numbers, the leading <code>token:</code> argument, <code>system.multicall</code>, and all.</p>
+            <p>Loopback JSON-RPC with string-valued numbers, the leading <code>token:</code> argument and <code>system.multicall</code>. Constant-time token checks and notification handling included.</p>
+          </article>
+          <article class="card">
+            <h3>FTP and SFTP</h3>
+            <p>More than HTTP: <code>ftp://</code> over V's FTP client and <code>sftp://</code> through an argv-driven external client, both behind the same Fetcher seam.</p>
+          </article>
+          <article class="card">
+            <h3>BitTorrent that verifies its pieces</h3>
+            <p>Bencode and metainfo parsing, HTTP trackers, peer wire protocol, rarest-first selection and SHA1 verification of every piece before it is written.</p>
+          </article>
+          <article class="card">
+            <h3>Peer discovery that goes further</h3>
+            <p>DHT fallback, PEX and magnet metadata exchange. Bare magnets resolve without a tracker, and completed torrents can be seeded to inbound peers.</p>
+          </article>
+          <article class="card">
+            <h3>Metalink and checksums</h3>
+            <p>Metalink 4 files and mirror URLs, plus <code>md5</code>, <code>sha1</code> and <code>sha256</code> verification that fails a download on mismatch.</p>
+          </article>
+          <article class="card">
+            <h3>Cancellation and supervision</h3>
+            <p>Pause and remove signal a worker's cancellation token. A stall supervisor restarts stuck downloads; <code>GET /health</code> reports readiness.</p>
+          </article>
+          <article class="card">
+            <h3>Cookies and robots, handled</h3>
+            <p>A locked cookie jar and per-host <code>robots.txt</code> rules, so a server's own preferences are respected before a request goes out.</p>
           </article>
           <article class="card">
             <h3>Built by the same <code>v</code></h3>
-            <p>No C shims, no GPL binary fetched by a script, no second HTTP stack. V's <code>net.http</code> owns the wire; this repo owns the manager.</p>
+            <p>No C shims, no GPL binary fetched by a script, no second HTTP stack. Installable as a vpm package; V's <code>net.http</code> owns the wire.</p>
           </article>
         </div>
       </section>
@@ -95,47 +119,10 @@
         </div>
       </section>
 
-      <section class="block reveal" id="roadmap">
-        <div class="section-head">
-          <h2>Roadmap</h2>
-          <p>Ordered by what makes the engine usable. A milestone is done only when a test would have caught it being wrong.</p>
-        </div>
-        <div class="grid">
-          <article class="card">
-            <h3><span class="pill done">Done</span> M0 · manager brain</h3>
-            <p>Byte-range planning, resume, URL/name derivation and the aria2-format session file. Pure, no sockets.</p>
-          </article>
-          <article class="card">
-            <h3><span class="pill done">Done</span> M1 · HTTP transfer</h3>
-            <p>Multi-connection HTTP(S), one-byte Range probe, per-download options and the <code>download</code> CLI.</p>
-          </article>
-          <article class="card">
-            <h3><span class="pill done">Done</span> M2 · RPC cut-over</h3>
-            <p>The <code>aria2.*</code> subset Fluxget calls, on the same loopback JSON-RPC shape. Reversible by host and port.</p>
-          </article>
-          <article class="card">
-            <h3><span class="pill done">Done</span> M3 · hardening</h3>
-            <p>vpm package, cancellation tokens, bounded queue, digit validation and constant-time token checks. Session restore, supervision and the notice queue are still absent.</p>
-          </article>
-          <article class="card">
-            <h3><span class="pill done">Done</span> M4 · FTP</h3>
-            <p>Whole-file downloads over <code>net.ftp</code>, behind the same Fetcher seam as HTTP.</p>
-          </article>
-          <article class="card">
-            <h3><span class="pill done">Done</span> M5 · BitTorrent</h3>
-            <p>Trackers, DHT, PEX, magnet metadata, rarest-first pieces, SHA1 verification and opt-in seeding.</p>
-          </article>
-          <article class="card">
-            <h3><span class="pill done">Done</span> M6 · Metalink, checksums</h3>
-            <p>Metalink 4 files and URLs, plus <code>md5</code>/<code>sha1</code>/<code>sha256</code> verification of completed downloads.</p>
-          </article>
-        </div>
-      </section>
-
       <section class="block reveal" id="start">
         <div class="section-head">
           <h2>Quick start</h2>
-          <p>V 0.5.2. <code>v fmt</code> is law. Tests are network-free — 72 of them across six module test files.</p>
+          <p>V 0.5.2. <code>v fmt</code> is law. Tests are network-free — 92 of them across twelve module test files.</p>
         </div>
         <div class="code">
           <div class="code-bar"><span>PowerShell</span><button class="copy" type="button" data-copy="body">Copy</button></div>
@@ -167,8 +154,7 @@ v test .</pre>
           <a class="link-card" href="https://github.com/metif12/fluxdl/blob/main/docs/PACKAGE.md"><strong>vpm package</strong><span>Install, import paths, and the public module surface.</span></a>
           <a class="link-card" href="https://github.com/metif12/fluxdl/blob/main/docs/CLI.md"><strong>CLI reference</strong><span>Every command and flag, pure and live.</span></a>
           <a class="link-card" href="https://github.com/metif12/fluxdl/blob/main/docs/ARCHITECTURE.md"><strong>Architecture</strong><span>The purity boundary and the transfer path.</span></a>
-          <a class="link-card" href="https://github.com/metif12/fluxdl/blob/main/docs/RPC.md"><strong>RPC reference</strong><span>The 25 methods and the four wire quirks.</span></a>
-          <a class="link-card" href="https://github.com/metif12/fluxdl/blob/main/ROADMAP.md"><strong>Roadmap</strong><span>What is done, what is next, what is not coming.</span></a>
+          <a class="link-card" href="https://github.com/metif12/fluxdl/blob/main/docs/RPC.md"><strong>RPC reference</strong><span>The aria2 method subset and the wire quirks Fluxget depends on.</span></a>
           <a class="link-card" href="https://github.com/metif12/fluxdl/blob/main/docs/compat/fluxget.md"><strong>Fluxget compatibility</strong><span>The exact aria2.* subset, extracted from the app.</span></a>
           <a class="link-card" href="https://github.com/metif12/fluxdl/tree/main/docs"><strong>ADRs</strong><span>Why the session format is aria2's, and why HTTP is not ours.</span></a>
         </div>
