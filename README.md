@@ -4,10 +4,10 @@
 [![V 0.5.2](https://img.shields.io/badge/V-0.5.2-7f8caa.svg)](https://vlang.io)
 [![license: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-**fluxdl** is a pure-V download engine for Fluxget: multi-connection HTTP(S),
-resumable transfers, aria2-format session files, and the same JSON-RPC surface
-Fluxget already calls. It is the transfer manager, not a fork of aria2 — so the
-cut-over is a host-and-port change, and reverting is the same change backwards.
+**fluxdl** is a download engine built from scratch in pure V, designed for speed
+and a small, predictable binary. Multi-connection HTTP(S), BitTorrent, FTP/SFTP
+and Metalink sit behind one transport interface, with the JSON-RPC surface
+Fluxget already uses. No C shims, no second HTTP stack, no legacy code to carry.
 
 **[Project site and documentation](https://metif12.github.io/fluxdl/)** ·
 [Quick start](docs/CLI.md) · [Architecture](docs/ARCHITECTURE.md) ·
@@ -43,30 +43,27 @@ The public modules are `plan`, `link`, `session`, `transfer`, `rpc`, `util`,
 `checksum`, `metalink`, `ftp`, `sftp`, `transports` and `torrent`. See
 [docs/PACKAGE.md](docs/PACKAGE.md) for the API surface and publishing notes.
 
-## Why this exists
+## Why a new engine
 
-Fluxget is a download manager built on top of `aria2c` as a child process. That
-was the right call and it is documented in
-[ADR-0003](https://github.com/metif12/fluxget/blob/main/docs/ADR/0003-compete-without-owning-the-transfer.md):
-owning the transfer means owning BitTorrent's attack surface, and a download
-manager with a webview in it should not.
+A download manager needs transfers it can reason about. fluxdl starts from that
+requirement: a small codebase where the manager is pure, the transports are
+interchangeable, and the hot paths are measured rather than assumed.
 
-This repo exists for the three reasons a fork of C++ is not a good answer, and
-it is scoped to those:
-
-1. **Fluxget runs on Windows only today, and aria2c ships as a GPL binary from a
-   script.** A pure-V engine is built by the same `v` that builds the app.
-2. **The protocol a desktop download manager needs first is HTTP.** The other
-   protocols are layered behind the same `transfer.Fetcher` seam rather than
-   growing a second engine.
-3. **A compile error is a build failure; a segfault in `aria2c 1.37.0` at 3am is a
-   bug report with no stack.**
+1. **Speed by construction.** One-segment downloads skip goroutines entirely,
+   range planning is arithmetic, status answers are cached by version, and
+   checksums stream instead of loading whole files.
+2. **One binary, one toolchain.** Pure V with no C shims or downloaded GPL
+   binary; V's `net.http` owns the wire and this engine owns the manager.
+3. **Replaceable protocols.** HTTP, FTP, SFTP and BitTorrent sit behind clear
+   seams, so a new transport is one registration rather than a rewrite.
+4. **Speak the app's language.** The loopback JSON-RPC shape and aria2-format
+   session file mean Fluxget can adopt it without a migration.
 
 ## What it does today
 
 | | |
 |---|---|
-| **Multi-connection downloads over HTTP(S)** | One file, N ranges, `Range: bytes=first-last`. The split is even with the remainder on segment zero, which is what aria2 does and what makes the progress bar finish when it looks finished. |
+| **Multi-connection downloads over HTTP(S)** | One file, N ranges, `Range: bytes=first-last`. Even segments, remainder on segment zero, nothing past EOF — arithmetic that makes the progress bar finish when it looks finished. |
 | **Resume** | Reads what is on disk and plans only the remainder. An offset that overshoots the file yields an empty plan rather than a request for a byte that does not exist. |
 | **Servers that ignore `Range`** | A one-byte probe detects a 200 answer and collapses the download to one connection instead of writing N copies of the body into one file. |
 | **Session save/restore in aria2's own format** | `--save-session` written flat, atomic by rename, and a reader that loses **one** line on corruption rather than the whole queue. |
@@ -81,11 +78,9 @@ it is scoped to those:
 | **Cookies and robots** | A cookie jar on HTTP responses and `robots.txt` checks before a request. |
 | **Readiness and supervision** | `GET /health` plus a stall supervisor that restarts stuck downloads. |
 
-What it reads is what `aria2c 1.37.0` was measured to write on this machine: a
-multi-mirror `addUri` comes back from `aria2.getUris` as **five rows for two
-URLs**, because aria2 expands the set internally. fluxdl reports one row per
-source instead; that difference is deliberate and is called out in
-[the compatibility note](docs/compat/fluxget.md).
+Fluxget compatibility is deliberate and documented: `getUris` reports one row
+per source, while the legacy engine expanded two URLs into five rows. The exact
+differences are in [the compatibility note](docs/compat/fluxget.md).
 
 ## What it does not do
 

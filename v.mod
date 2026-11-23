@@ -1,6 +1,6 @@
 Module {
 	name: 'fluxdl'
-	description: 'A download engine in pure V - the transfer manager, not a fork'
+	description: 'A fast download engine built from scratch in pure V'
 	version: '0.4.0'
 	license: 'MIT'
 	author: 'Fluxget <fluxget@localhost>'

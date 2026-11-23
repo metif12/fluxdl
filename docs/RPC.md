@@ -9,8 +9,7 @@ fluxdl serves the same loopback shape Fluxget talks to today:
 - `X-Rpc-Secret` and `?token=<secret>` are accepted as alternatives.
 
 Every numeric field in a result is a **string** (`"completedLength":"1048576"`).
-That is not a stylistic choice — it is what `aria2c 1.37.0` was measured to send
-and what Fluxget parses.
+That is not a stylistic choice — it is the contract Fluxget parses.
 
 Start the server with `fluxdl serve --secret <token>`. With no secret configured,
 the token argument is optional. `GET /health` returns 200 once the session has
