@@ -3,6 +3,7 @@
 // bounded iterative lookup is enough to seed the swarm for one download.
 module torrent
 
+import crypto.rand
 import net
 import time
 
@@ -39,11 +40,14 @@ mut:
 }
 
 pub fn new_dht() &Dht {
-	mut id := []u8{len: 20}
-	seed_value := i64(time.sys_mono_now())
-	for i := 0; i < 20; i++ {
-		value := (seed_value + i64(i) * 7919) % 256
-		id[i] = u8(value)
+	// Random node ID: a predictable one lets other nodes spoof our identity.
+	id := rand.bytes(20) or {
+		mut fallback := []u8{len: 20}
+		seed_value := i64(time.sys_mono_now())
+		for i := 0; i < 20; i++ {
+			fallback[i] = u8((seed_value + i64(i) * 7919) % 256)
+		}
+		fallback
 	}
 	return &Dht{ id: id, tid: 1 }
 }

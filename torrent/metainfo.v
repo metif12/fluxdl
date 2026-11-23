@@ -7,6 +7,7 @@ module torrent
 
 import crypto.sha1
 import encoding.base32
+import fluxdl.util
 import encoding.hex
 import net.urllib
 import strings
@@ -312,9 +313,8 @@ fn percent_decode(s string) string {
 	mut i := 0
 	for i < s.len {
 		if s[i] == `%` && i + 2 < s.len {
-			hexpair := s[i + 1..i + 3]
-			if all_digits(hexpair) || is_hex_letters(hexpair) {
-				out.write_u8(u8(hexpair.i64()))
+			if byte := util.decode_hex_pair(s[i + 1..i + 3]) {
+				out.write_u8(byte)
 				i += 3
 				continue
 			}
@@ -331,13 +331,4 @@ fn percent_decode(s string) string {
 		out.free()
 	}
 	return res
-}
-
-fn is_hex_letters(s string) bool {
-	for c in s {
-		if !((c >= `a` && c <= `f`) || (c >= `A` && c <= `F`)) {
-			return false
-		}
-	}
-	return s.len > 0
 }

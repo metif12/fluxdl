@@ -44,6 +44,13 @@ fn test_bencode_integer_requires_digits() {
 	assert false, 'trailing garbage in an integer must be rejected'
 }
 
+fn test_magnet_percent_decode_handles_hex_letters() {
+	m := parse_magnet('magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567&dn=caf%C3%A9') or {
+		panic(err.msg())
+	}
+	assert m.name == 'café', m.name
+}
+
 fn test_malformed_bencode_is_an_error() {
 	decode('i12'.bytes()) or {
 		assert err.msg().contains('unterminated'), err.msg()

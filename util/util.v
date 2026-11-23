@@ -34,6 +34,31 @@ pub fn i64_or(s string, default_value i64) i64 {
 	return s.i64()
 }
 
+fn hex_nibble(c u8) ?u8 {
+	if c >= `0` && c <= `9` {
+		return c - `0`
+	}
+	if c >= `a` && c <= `f` {
+		return c - `a` + 10
+	}
+	if c >= `A` && c <= `F` {
+		return c - `A` + 10
+	}
+	return none
+}
+
+// decode_hex_pair decodes exactly two hex digits into one byte. This is the
+// shared decoder for hand-rolled hex parsing (magnet dn= escapes); the stdlib
+// hex.decode handles whole strings elsewhere.
+pub fn decode_hex_pair(s string) ?u8 {
+	if s.len != 2 {
+		return none
+	}
+	high := hex_nibble(s[0]) or { return none }
+	low := hex_nibble(s[1]) or { return none }
+	return u8((high << 4) | low)
+}
+
 // secure_equal compares two secrets without stopping at the first difference.
 // The loop length depends only on the public lengths, not on the contents.
 pub fn secure_equal(a string, b string) bool {
