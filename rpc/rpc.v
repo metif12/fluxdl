@@ -54,6 +54,14 @@ struct StatusCache {
 	json    string
 }
 
+// RowsCache is a whole tellActive/TellWaiting/tellStopped array for one queue
+// version. Fluxget polls these every tick; rebuilding 100 row strings per tick
+// is the remaining cost after per-row caching.
+struct RowsCache {
+	version int
+	json    string
+}
+
 // Manager owns the queue and the settings document. It is shared by the HTTP
 // server's worker threads: map reads and writes take mu. Workers snapshot the
 // values they need under mu and never read a map after releasing it.
@@ -67,6 +75,7 @@ pub mut:
 	secret       string
 	fetcher      &transfer.Fetcher
 	status_cache map[string]StatusCache
+	row_lists    map[string]RowsCache
 	cancels      map[string]&transfer.Cancel
 	notices      []string
 	started_at   map[string]i64
@@ -107,6 +116,7 @@ pub fn new_manager(secret string, session_path string) &Manager {
 		secret:       secret
 		fetcher:      transfer.new_http_fetcher()
 		status_cache: map[string]StatusCache{}
+		row_lists:    map[string]RowsCache{}
 		cancels:      map[string]&transfer.Cancel{}
 		started_at:   map[string]i64{}
 		auto_start:   true
@@ -573,6 +583,13 @@ fn (mut m Manager) dispatch(method string, p []json2.Any) (string, int, string) 
 			} else {
 				''
 			}
+			cache_key := if wanted == '' { 'stopped' } else { wanted }
+			if cache_key in m.row_lists {
+				cached := m.row_lists[cache_key]
+				if cached.version == m.queue_version && cached.json != '' {
+					return cached.json, 0, ''
+				}
+			}
 			// Build the array directly: no slice of row strings and no join copy.
 			mut rows := strings.new_builder(512)
 			rows.write_byte(`[`)
@@ -596,6 +613,7 @@ fn (mut m Manager) dispatch(method string, p []json2.Any) (string, int, string) 
 			unsafe {
 				rows.free()
 			}
+			m.row_lists[cache_key] = RowsCache{ version: m.queue_version, json: result_json }
 			return result_json, 0, ''
 		}
 		'aria2.pause', 'aria2.unpause' {
@@ -1270,6 +1288,7 @@ fn (mut m Manager) set_active_uri(gid string, uri string) {
 	mut d := m.downloads[gid]
 	d.active_uri = uri
 	d.version++
+	m.queue_version++
 	m.downloads[gid] = d
 }
 
