@@ -141,6 +141,3 @@ fn field_from(arr []json2.Any, i int) json2.Any {
 	}
 	return json2.Any(json2.Null{})
 }
-
-// RowBuilder writes one JSON object without building an Any tree first.
-// Every field in a tellStatus row is a string on the wire, except `files`.

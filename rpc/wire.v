@@ -20,6 +20,17 @@ struct RpcRequest {
 	id     ?json2.Any
 }
 
+fn provided_secret(m &Manager, params []json2.Any) string {
+	if params.len == 0 {
+		return ''
+	}
+	value := any_str(params[0])
+	if value.starts_with('token:') {
+		return m.secret
+	}
+	return ''
+}
+
 // readonly_method lists calls whose answer depends only on queue/option state,
 // so an identical request can reuse its last envelope.
 fn readonly_method(method string) bool {
@@ -70,10 +81,17 @@ pub fn (mut m Manager) handle_payload(raw string) string {
 	}
 
 	cacheable := readonly_method(method)
+	// The cache key omits the leading token argument: the secret must not be
+	// retained as a map key for the manager's whole lifetime.
+	cache_key := if params.len > 0 && any_str(params[0]).starts_with('token:') {
+		method + '\x00' + raw[raw.index('token:') or { raw.len }..].replace(provided_secret(m, params), '')
+	} else {
+		method + '\x00' + raw
+	}
 	if cacheable {
 		m.mu.lock()
-		if raw in m.responses {
-			cached := m.responses[raw]
+		if cache_key in m.responses {
+			cached := m.responses[cache_key]
 			if cached.queue_version == m.queue_version && cached.options_version == m.options_version {
 				m.mu.unlock()
 				return cached.body
@@ -122,7 +140,7 @@ pub fn (mut m Manager) handle_payload(raw string) string {
 	body := ok(id, result_json)
 	if cacheable {
 		m.mu.lock()
-		m.responses[raw] = ResponseCache{
+		m.responses[cache_key] = ResponseCache{
 			queue_version:   m.queue_version
 			options_version: m.options_version
 			body:            body

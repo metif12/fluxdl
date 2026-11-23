@@ -18,7 +18,7 @@ main.v                 the CLI (also a library consumer)
   ├── transports        one registry mapping URL scheme → Fetcher factory
   ├── torrent           bencode, trackers, DHT, peer wire, seeding
   └── rpc/              JSON-RPC shape ──> transfer.Fetcher
-        state.v         queue, caches, versions
+        rpc.v           queue, caches, versions
         wire.v          request parsing and method dispatch
         encode.v        status-row JSON writer
         json.v          JSON value helpers

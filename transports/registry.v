@@ -16,12 +16,20 @@ mut:
 
 // new returns a registry with the built-in HTTP, FTP and SFTP transports.
 pub fn new() &Registry {
+	return with_http(transfer.new_http_fetcher())
+}
+
+// with_http builds a registry that reuses the supplied HTTP fetcher for
+// http/https. Sharing one instance preserves its cookie jar and robots cache
+// across downloads; FTP/SFTP still get a fresh fetcher per lookup because each
+// caches a whole file body.
+pub fn with_http(http_fetcher &transfer.Fetcher) &Registry {
 	mut registry := &Registry{ factories: map[string]Factory{} }
-	registry.register('http', fn () &transfer.Fetcher {
-		return transfer.new_http_fetcher()
+	registry.register('http', fn [http_fetcher] () &transfer.Fetcher {
+		return http_fetcher
 	})
-	registry.register('https', fn () &transfer.Fetcher {
-		return transfer.new_http_fetcher()
+	registry.register('https', fn [http_fetcher] () &transfer.Fetcher {
+		return http_fetcher
 	})
 	registry.register('ftp', fn () &transfer.Fetcher {
 		return ftp.new_fetcher()
@@ -42,7 +50,7 @@ pub fn (mut r Registry) register(scheme string, factory Factory) {
 // cache, so sharing one across downloads would be wrong.
 pub fn (r &Registry) fetcher_for(url string) ?&transfer.Fetcher {
 	colon := url.index('://') or { return none }
-	scheme := url[..colon]
+	scheme := url[..colon].to_lower()
 	if scheme in r.factories {
 		return r.factories[scheme]()
 	}

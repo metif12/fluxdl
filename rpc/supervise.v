@@ -73,8 +73,9 @@ pub fn (mut m Manager) is_ready() bool {
 	return m.ready
 }
 
-// fetcher_for asks the transport registry. The injected fetcher remains the
-// fallback (tests inject a fake; HTTP uses the manager's shared instance).
+// fetcher_for asks the transport registry. The manager's HTTP fetcher is
+// registered for http/https so cookies and robots rules persist across
+// downloads; tests inject a fake and unknown schemes fall back to it.
 fn (m &Manager) fetcher_for(url string) &transfer.Fetcher {
 	return m.registry.fetcher_for(url) or { m.fetcher }
 }

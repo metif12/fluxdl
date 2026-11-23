@@ -98,6 +98,7 @@ pub fn new_manager(secret string, session_path string) &Manager {
 	if dir == '' {
 		dir = os.join_path(os.home_dir(), 'Downloads')
 	}
+	fetcher := transfer.new_http_fetcher()
 	mut opts := map[string]string{}
 	opts['dir'] = dir
 	opts['max-connection-per-server'] = '4'
@@ -113,8 +114,8 @@ pub fn new_manager(secret string, session_path string) &Manager {
 		options:      opts
 		session_path: session_path
 		secret:       secret
-		fetcher:      transfer.new_http_fetcher()
-		registry:     transports.new()
+		fetcher:      fetcher
+		registry:     transports.with_http(fetcher)
 		status_cache: map[string]StatusCache{}
 		row_lists:    map[string]RowsCache{}
 		responses:    map[string]ResponseCache{}
