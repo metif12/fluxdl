@@ -6,8 +6,8 @@ for CLI flags see [CLI.md](CLI.md).
 ## Install
 
 ```powershell
-v install metif12.fluxdl                            # from vpm
-v install --git https://github.com/metif12/fluxdl   # from source
+v install mahdir-ir.fluxdl                            # from vpm
+v install --git https://github.com/mahdir-ir/fluxdl   # from source
 ```
 
 From inside another project, `v install` also records the dependency in that

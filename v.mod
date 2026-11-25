@@ -4,7 +4,7 @@ Module {
 	version: '0.4.0'
 	license: 'MIT'
 	author: 'Fluxget <fluxget@localhost>'
-	repo_url: 'https://github.com/metif12/fluxdl'
+	repo_url: 'https://github.com/mahdir-ir/fluxdl'
 	repo_branch: 'main'
 	dependencies: []
 }

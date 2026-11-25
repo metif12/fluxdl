@@ -1,6 +1,6 @@
 # fluxdl
 
-[![docs](https://img.shields.io/badge/docs-fluxdl.dev-blue)](https://metif12.github.io/fluxdl/)
+[![docs](https://img.shields.io/badge/docs-fluxdl.dev-blue)](https://mahdir-ir.github.io/fluxdl/)
 [![V 0.5.2](https://img.shields.io/badge/V-0.5.2-7f8caa.svg)](https://vlang.io)
 [![license: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
@@ -9,7 +9,7 @@ and a small, predictable binary. Multi-connection HTTP(S), BitTorrent, FTP/SFTP
 and Metalink sit behind one transport interface, with the JSON-RPC surface
 Fluxget already uses. No C shims, no second HTTP stack, no legacy code to carry.
 
-**[Project site and documentation](https://metif12.github.io/fluxdl/)** ·
+**[Project site and documentation](https://mahdir-ir.github.io/fluxdl/)** ·
 [Guides](docs/GUIDES.md) · [V module API](docs/API.md) ·
 [Quick start](docs/CLI.md) · [Architecture](docs/ARCHITECTURE.md) ·
 [RPC reference](docs/RPC.md) · [vpm package](docs/PACKAGE.md) ·
@@ -18,17 +18,18 @@ Fluxget already uses. No C shims, no second HTTP stack, no legacy code to carry.
 ## Install as a V package
 
 ```powershell
-v install metif12.fluxdl                            # from vpm
-v install --git https://github.com/metif12/fluxdl   # from source today
+v install mahdir-ir.fluxdl                            # from vpm
+v install --git https://github.com/mahdir-ir/fluxdl   # from source today
 ```
 
 Add it to a project's `v.mod` with `v install` from inside that project. VPM
-packages are imported under their full name (`metif12.fluxdl.plan`); a git
+packages are imported under their full name (`mahdir_ir.fluxdl.plan` — the `-`
+in the org name becomes `_` in V imports); a git
 install of this repo uses the short prefix (`fluxdl.plan`):
 
 ```v
-import metif12.fluxdl.plan
-import metif12.fluxdl.link
+import mahdir_ir.fluxdl.plan
+import mahdir_ir.fluxdl.link
 
 fn main() {
 	segs := plan.plan(1048576, 4, 0)
@@ -96,7 +97,7 @@ Honest, because a list like this is the only thing that makes the list useful.
 ## Install and use
 
 ```powershell
-git clone https://github.com/metif12/fluxdl.git
+git clone https://github.com/mahdir-ir/fluxdl.git
 cd fluxdl
 v build -o fluxdl.exe .          # V 0.5.2
 

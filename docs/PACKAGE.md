@@ -8,13 +8,13 @@ It builds with V 0.5.2.
 From vpm:
 
 ```powershell
-v install metif12.fluxdl
+v install mahdir-ir.fluxdl
 ```
 
 From git, today:
 
 ```powershell
-v install --git https://github.com/metif12/fluxdl
+v install --git https://github.com/mahdir-ir/fluxdl
 ```
 
 `v install` run inside another project also records the dependency in that
@@ -23,12 +23,14 @@ it into the modules directory; `v unlink` removes the link.
 
 ## Import paths
 
-A VPM package is imported under its full publisher-qualified name. A git
+A VPM package is imported under its full publisher-qualified name. Because the
+org name contains a hyphen, V normalizes it to an underscore in import paths:
+install `mahdir-ir.fluxdl`, write `mahdir_ir.fluxdl`. A git
 install uses the `v.mod` name only:
 
 | Installed as | Import prefix | Example |
 |---|---|---|
-| `metif12.fluxdl` (vpm) | `metif12.fluxdl` | `import metif12.fluxdl.plan` |
+| `mahdir-ir.fluxdl` (vpm) | `mahdir_ir.fluxdl` | `import mahdir_ir.fluxdl.plan` |
 | `fluxdl` (`--git`) | `fluxdl` | `import fluxdl.plan` |
 
 In either case the module name you write code against is just the last
@@ -64,8 +66,10 @@ A complete library example is in [`examples/library.v`](../examples/library.v).
 3. Commit and push to `main`; `repo_url` and `repo_branch` in `v.mod` point
    there.
 4. Register the package once at <https://vpm.vlang.io/new> with GitHub login.
-   The registry combines the account and repo into `metif12.fluxdl`; the entry
+   The registry combines the account and repo into `mahdir-ir.fluxdl`; the entry
    cannot be edited after submission, so check the name and URL first.
+   The repo moved here from `metif12/fluxdl`, whose old vpm entry is retired
+   and cannot be renamed — this org address needs its own fresh submission.
 5. Tag the repository with `vlang` and `vlang-package` for discoverability.
 
 The package name in `v.mod` stays `fluxdl` — the publisher prefix is added by

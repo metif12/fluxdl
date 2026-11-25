@@ -1,14 +1,14 @@
 # V module API
 
 fluxdl is a V package with twelve public modules. Install it with
-`v install metif12.fluxdl` and import any module by its last path component:
+`v install mahdir-ir.fluxdl` and import any module by its last path component:
 
 ```v
-import metif12.fluxdl.plan
-import metif12.fluxdl.transfer
+import mahdir_ir.fluxdl.plan
+import mahdir_ir.fluxdl.transfer
 ```
 
-A git install (`v install --git https://github.com/metif12/fluxdl`) uses the
+A git install (`v install --git https://github.com/mahdir-ir/fluxdl`) uses the
 short prefix `fluxdl.*`. See [PACKAGE.md](PACKAGE.md) for installation details.
 
 ## plan — byte-range arithmetic

@@ -4,7 +4,7 @@
 //   v run examples/library.v
 //
 // A project that installed the package with vpm would import
-// `metif12.fluxdl.plan` and `metif12.fluxdl.link` instead.
+// `mahdir_ir.fluxdl.plan` and `mahdir_ir.fluxdl.link` instead.
 module main
 
 import fluxdl.link
